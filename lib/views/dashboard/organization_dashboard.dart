@@ -8,7 +8,7 @@ class OrganizationDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // TOGGLE THIS: Set to true to see the "Empty State" UI
-    bool isDashboardEmpty = false;
+    bool isDashboardEmpty = true;
 
     final List<Map<String, dynamic>> deadlines = [
       {'title': 'Logistics', 'tasks': '3 tasks due today', 'icon': Icons.local_shipping, 'color': Colors.orange},
