@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../views/dashboard/main_dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -8,6 +9,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+
+  bool isRegister = false;
+
+  final confirmPasswordController = TextEditingController();
 
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
@@ -70,7 +75,22 @@ class _LoginScreenState extends State<LoginScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
 
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 500),
+                transitionBuilder: (child, animation) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: FadeTransition(
+                      opacity: animation,
+                      child: child,
+                    ),
+                  );
+                },
                 child: Column(
+                  key: ValueKey(isRegister),
                   children: [
 
                     const SizedBox(height: 64),
@@ -93,8 +113,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 24),
 
                     /// Title
-                    const Text(
-                      "Welcome back",
+                    Text(
+                      isRegister ? "Create Account" : "Hello !!",
                       style: TextStyle(
                         fontSize: 30,
                         fontWeight: FontWeight.bold,
@@ -105,8 +125,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 8),
 
                     /// Subtitle
-                    const Text(
-                      "Sign in to manage your\norganization's tasks and finances\nsecurely.",
+                    Text(
+                      isRegister
+                        ? "Register to start managing\nyour organization."
+                        : "Sign in to manage your\norganization's tasks and finances\nsecurely.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 16,
@@ -164,13 +186,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
 
-                            Text(
-                              "Forgot?",
-                              style: TextStyle(
-                                color: Color(0xFF137FEC),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            )
+                            // Text(
+                            //   "Forgot?",
+                            //   style: TextStyle(
+                            //     color: Color(0xFF137FEC),
+                            //     fontWeight: FontWeight.w600,
+                            //   ),
+                            // )
                           ],
                         ),
 
@@ -203,7 +225,38 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ],
                     ),
+                  if (isRegister) ...[
 
+                    const SizedBox(height: 20),
+
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+
+                        const Text(
+                          "Confirm Password",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        TextField(
+                          controller: confirmPasswordController,
+                          obscureText: obscurePassword,
+                          decoration: InputDecoration(
+                            hintText: "••••••••",
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                     const SizedBox(height: 24),
 
                     /// Sign In Button
@@ -219,10 +272,27 @@ class _LoginScreenState extends State<LoginScreen> {
                           elevation: 6,
                         ),
                         onPressed: () {
-                          // TODO: Call ViewModel login()
+                          if (isRegister) {
+
+                            // TODO: call register logic
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Register logic not implemented yet")),
+                            );
+
+                          } else {
+
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const MainDashboardScreen(),
+                              ),
+                            );
+
+                          }
                         },
-                        child: const Text(
-                          "Sign In",
+                        child: Text(
+                          isRegister ? "Register Account" : "Sign In",
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.white,
@@ -236,14 +306,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     /// Divider
                     Row(
-                      children: const [
+                      children: [
 
                         Expanded(child: Divider()),
 
                         Padding(
                           padding: EdgeInsets.symmetric(horizontal: 12),
                           child: Text(
-                            "DON'T HAVE AN ACCOUNT?",
+                            isRegister ? "ALREADY HAVE AN ACCOUNT?" : "DON'T HAVE AN ACCOUNT?",
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -264,8 +334,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       height: 56,
                       child: OutlinedButton.icon(
                         icon: const Icon(Icons.person_add),
-                        label: const Text(
-                          "Register",
+                        label: Text(
+                          isRegister ? "Back to Login" : "Register",
                           style: TextStyle(fontSize: 16),
                         ),
                         style: OutlinedButton.styleFrom(
@@ -277,15 +347,19 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         onPressed: () {
-                          // TODO: Navigate to register page
+                          // TODO: implement register logic
+
+                          setState(() {
+                            isRegister = !isRegister;
+                          });
                         },
                       ),
                     ),
 
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+            )],
           ),
         ),
       ),
