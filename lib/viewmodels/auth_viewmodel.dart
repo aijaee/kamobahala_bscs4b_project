@@ -15,6 +15,8 @@ class AuthViewModel extends ChangeNotifier {
 
     try {
 
+      // TODO IMPLEMENT ACTUAL AUTH LOGIC
+
       // ============================================
       // BACKEND PLACEHOLDER
       // ============================================
