@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'organization_dashboard.dart';
+import '../auth/login_screen.dart';
 
 class MainDashboardScreen extends StatefulWidget {
   const MainDashboardScreen({super.key});
@@ -9,10 +12,21 @@ class MainDashboardScreen extends StatefulWidget {
 
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
+  // TODO: Implement actual navigation logic and state management for bottom nav
   int currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
+    // TODO: replace with logic that loads organizations for current user
+    bool hasOrganizations = true;
+    
+    final List<Map<String, String>> organizations = [
+      {'name': 'Acme Corp', 'role': 'Member'},
+      {'name': 'Beta Solutions', 'role': 'Admin'},
+      {'name': 'Gamma Initiatives', 'role': 'Contributor'},
+    ];
+
+    // TODO: fetch organization data from database/service
 
     return Scaffold(
 
@@ -37,16 +51,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           ),
 
           BottomNavigationBarItem(
-            icon: Icon(Icons.folder_outlined),
-            label: "Projects",
-          ),
-
-          BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            label: "Finances",
-          ),
-
-          BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             label: "Profile",
           ),
@@ -66,36 +70,24 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        "Main Dashboard",
-                        style: TextStyle(
+                      Text(
+                        // TODO : replace with actual user name
+                        "Welcome back, User!",
+                        style: GoogleFonts.inter(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-
-                      Stack(
-                        children: [
-                          // TODO: Implement actual logic that checks for notifications and displays the red dot accordingly
-                          
-                          IconButton(
-                            icon: const Icon(Icons.notifications_outlined),
-                            onPressed: () {},
-                          ),
-
-                          Positioned(
-                            right: 8,
-                            top: 8,
-                            child: Container(
-                              width: 10,
-                              height: 10,
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
+                      IconButton(
+                        icon: const Icon(Icons.logout),
+                        onPressed: () {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const LoginScreen(),
                             ),
-                          )
-                        ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -112,305 +104,132 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
 
-                    /// FINANCIAL SUMMARY CARD
-                    Container(
-                      width: double.infinity,
-                      height: 190,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF137FEC),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.blue.withOpacity(.2),
-                            blurRadius: 15,
-                            offset: const Offset(0, 10),
-                          )
-                        ],
-                      ),
-
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: const [
-
-                              Text(
-                                "TOTAL DEPOSITORY BALANCE",
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                  letterSpacing: 1,
-                                ),
-                              ),
-
-                              Icon(
-                                Icons.visibility_outlined,
-                                color: Colors.white,
-                              )
-                            ],
-                          ),
-
-                          const SizedBox(height: 16),
-
-                          const Text(
-                            "₱45,280.00",
-                            style: TextStyle(
-                              fontSize: 30,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-
-                          const Spacer(),
-
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: const Color(0xFF137FEC),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                              onPressed: () {
-                                // TODO navigate finances
-                              },
-                              child: const Text("View Financial Details"),
-                            ),
-                          )
-                        ],
-                      ),
-                    ),
-
+                    /// ORGANIZATIONS
+                    if (!hasOrganizations) 
+                      _buildOrgEmptyState()
+                    else
+                      _buildOrganizationList(organizations),
                     const SizedBox(height: 24),
 
-                    /// PRIORITY DEADLINES
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: const [
-                        // TODO: Implement actual logic that displays prio deadlines and categorizes them by project
-                        Text(
-                          "Priority Deadlines",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-
-                        Text(
-                          "View Calendar",
-                          style: TextStyle(
-                            color: Color(0xFF137FEC),
-                          ),
-                        )
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    GridView.count(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 2,
-
-                      children: const [
-                        // TODO: Implement actual logic that displays prio deadlines
-                        DeadlineCard("LCPC 2026", "3 tasks due today"),
-                        DeadlineCard("CS Talks", "5 tasks due tomorrow"),
-                        DeadlineCard("The Howl General Assembly", "1 task is due on [date]"),
-                        DeadlineCard("Animolympics 2026", "2 tasks due on [date]"),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    /// ACTIVE PROJECTS
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: const [
-
-                        Text(
-                          "Active Projects",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-
-                        Text(
-                          // TODO: Implement actual logic that navigates to projects page
-                          "See All",
-                          style: TextStyle(
-                            color: Color(0xFF137FEC),
-                          ),
-                        )
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    SizedBox(
-                      height: 180,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: const [
-                          // TODO: Implement actual logic that displays active projects
-                          ProjectCard(
-                            "Project Phoenix",
-                            "Q3 Product Revamp",
-                            0.75,
-                            "12 Days Left",
-                          ),
-
-                          SizedBox(width: 16),
-
-                          ProjectCard(
-                            "Global Retail Rollout",
-                            "Expansion Phase 1",
-                            0.40,
-                            "45 Days Left",
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ]  
                 ),
-              ),
+              )
             )
           ],
         ),
       ),
     );
   }
-}
 
-class DeadlineCard extends StatelessWidget {
+  Widget _buildOrganizationList(List<Map<String, String>> orgs) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          "Your Organizations",
+          style: TextStyle(fontSize: 18),
+        ),
+        const SizedBox(height: 12),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: orgs.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            final org = orgs[index];
+            return _buildOrganizationCard(org['name']!, org['role']!, context);
+          },
+        ),
+      ],
+    );
+  }
 
-  final String category;
-  final String text;
-
-  const DeadlineCard(this.category, this.text, {super.key});
-
-  @override
-  Widget build(BuildContext context) {
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
+  Widget _buildOrganizationCard(String name, String role, BuildContext context) {
+    return Material(
+      elevation: 2,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFF3F4F6)),
-      ),
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-
-          Text(
-            category,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.grey,
-              fontWeight: FontWeight.w600,
+        onTap: () {
+          // navigate to organization's dashboard (placeholder)
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const OrganizationDashboard(),
             ),
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 35, horizontal: 20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF137FEC),
+                Color.fromARGB(255, 33, 70, 113),
+              ],
+        ),
+            borderRadius: BorderRadius.circular(12),
           ),
-
-          const SizedBox(height: 6),
-
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-            ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: const Color.fromARGB(255, 255, 255, 255).withOpacity(.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.business, color: Color.fromARGB(255, 236, 236, 236)),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600, color: const Color.fromARGB(255, 243, 243, 243))),
+                    const SizedBox(height: 4),
+                    Text(role, style: GoogleFonts.inter(fontSize: 12, color: const Color.fromARGB(255, 222, 222, 222))),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Color.fromARGB(255, 208, 208, 208)),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
-}
 
-class ProjectCard extends StatelessWidget {
-
-  final String title;
-  final String subtitle;
-  final double progress;
-  final String daysLeft;
-
-  const ProjectCard(
-    this.title,
-    this.subtitle,
-    this.progress,
-    this.daysLeft,
-    {super.key}
-  );
-
-  @override
-  Widget build(BuildContext context) {
-
-    return Container(
-      width: 240,
-      padding: const EdgeInsets.all(16),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFF3F4F6)),
-      ),
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.blue.shade100,
-              borderRadius: BorderRadius.circular(8),
+  Widget _buildOrgEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 60),
+        child: Column(
+          children: [
+            Icon(Icons.domain_disabled, size: 80, color: Colors.grey.withOpacity(.3)),
+            const SizedBox(height: 16),
+            const Text(
+              "No Organizations Joined",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
             ),
-            child: const Icon(Icons.folder, color: Colors.blue),
-          ),
-
-          const SizedBox(height: 12),
-
-          Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
+            const SizedBox(height: 8),
+            const Text(
+              "Join or create an organization to get started.",
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
             ),
-          ),
-
-          Text(
-            subtitle,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.grey,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          LinearProgressIndicator(value: progress),
-
-          const SizedBox(height: 6),
-
-          Text(
-            // TODO: Implement actual logic that calculates progress and days left
-            "${(progress * 100).toInt()}% Complete • $daysLeft",
-            style: const TextStyle(
-              fontSize: 11,
-              color: Colors.grey,
-            ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                // TODO: navigate to join/create org screen
+              },
+              child: const Text('Join or Create'),
+            )
+          ],
+        ),
       ),
     );
   }

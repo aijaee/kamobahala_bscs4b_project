@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../views/dashboard/main_dashboard_screen.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,14 +24,21 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F8),
+      backgroundColor: const Color.fromARGB(255, 12, 13, 14),
 
       body: Center(
         child: Container(
           width: 480,
           constraints: const BoxConstraints(minHeight: 750),
           decoration: BoxDecoration(
-            color: Colors.white,
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color.fromARGB(255, 255, 255, 255),
+                Color.fromARGB(255, 235, 244, 255),
+              ],
+            ),
             boxShadow: [
               BoxShadow(
                 blurRadius: 50,
@@ -76,17 +84,15 @@ class _LoginScreenState extends State<LoginScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 24),
 
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 500),
+                duration: const Duration(milliseconds: 400),
                 transitionBuilder: (child, animation) {
-                  return SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: FadeTransition(
-                      opacity: animation,
-                      child: child,
+                  // smooth scale & fade for clean/formal feel
+                  final fade = FadeTransition(opacity: animation, child: child);
+                  return ScaleTransition(
+                    scale: Tween<double>(begin: 0.95, end: 1.0).animate(
+                      CurvedAnimation(parent: animation, curve: Curves.easeOutQuad),
                     ),
+                    child: fade,
                   );
                 },
                 child: Column(
@@ -115,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     /// Title
                     Text(
                       isRegister ? "Create Account" : "Hello !!",
-                      style: TextStyle(
+                      style: GoogleFonts.inter(
                         fontSize: 30,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF111418),
@@ -130,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? "Register to start managing\nyour organization."
                         : "Sign in to manage your\norganization's tasks and finances\nsecurely.",
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: GoogleFonts.inter(
                         fontSize: 16,
                         color: Color(0xFF617589),
                         height: 1.5,
@@ -144,9 +150,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
 
-                        const Text(
+                        Text(
                           "Email Address",
-                          style: TextStyle(
+                          style: GoogleFonts.inter(
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
@@ -176,11 +182,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: const [
+                          children: [
 
                             Text(
                               "Password",
-                              style: TextStyle(
+                              style: GoogleFonts.inter(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),
@@ -233,9 +239,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
 
-                        const Text(
+                        Text(
                           "Confirm Password",
-                          style: TextStyle(
+                          style: GoogleFonts.inter(
                             fontWeight: FontWeight.w600,
                             fontSize: 14,
                           ),
@@ -263,40 +269,48 @@ class _LoginScreenState extends State<LoginScreen> {
                     SizedBox(
                       width: double.infinity,
                       height: 56,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF137FEC),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          elevation: 6,
-                        ),
-                        onPressed: () {
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () {
                           if (isRegister) {
-
                             // TODO: call register logic
-
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(content: Text("Register logic not implemented yet")),
                             );
-
                           } else {
-
                             Navigator.pushReplacement(
                               context,
                               MaterialPageRoute(
                                 builder: (context) => const MainDashboardScreen(),
                               ),
                             );
-
                           }
                         },
-                        child: Text(
-                          isRegister ? "Register Account" : "Sign In",
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color.fromARGB(255, 21, 68, 114), Color(0xFF4A90E2)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 6,
+                                offset: const Offset(0, 3),
+                              )
+                            ],
+                          ),
+                          child: Center(
+                            child: Text(
+                              isRegister ? "Register Account" : "Sign In",
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -314,7 +328,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           padding: EdgeInsets.symmetric(horizontal: 12),
                           child: Text(
                             isRegister ? "ALREADY HAVE AN ACCOUNT?" : "DON'T HAVE AN ACCOUNT?",
-                            style: TextStyle(
+                            style: GoogleFonts.inter(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                               color: Color(0xFF617589),
@@ -336,7 +350,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         icon: const Icon(Icons.person_add),
                         label: Text(
                           isRegister ? "Back to Login" : "Register",
-                          style: TextStyle(fontSize: 16),
+                          style: GoogleFonts.inter(fontSize: 16),
                         ),
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(
