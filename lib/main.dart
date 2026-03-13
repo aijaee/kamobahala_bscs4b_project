@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'views/auth/login_screen.dart';
-import 'views/dashboard/main_dashboard_screen.dart';
-import 'views/projects/projects_list.dart';
-import 'views/dashboard/organization_dashboard.dart';
 
 void main() {
   runApp(const MyApp());

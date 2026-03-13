@@ -215,7 +215,9 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
           const SizedBox(height: 20),
           ElevatedButton(
             // TODO: Implement financial details navigation
-            onPressed: () {},
+            onPressed: () {
+              
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: const Color(0xFF137FEC),

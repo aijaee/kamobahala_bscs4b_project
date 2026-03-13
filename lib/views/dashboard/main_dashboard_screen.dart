@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'organization_dashboard.dart';
 import '../auth/login_screen.dart';
+import 'create_organization_screen.dart';
+import 'edit_organization_screen.dart';
 
 class MainDashboardScreen extends StatefulWidget {
   const MainDashboardScreen({super.key});
@@ -23,7 +25,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     final List<Map<String, String>> organizations = [
       {'name': 'Acme Corp', 'role': 'Member'},
       {'name': 'Beta Solutions', 'role': 'Admin'},
-      {'name': 'Gamma Initiatives', 'role': 'Contributor'},
+      {'name': 'Gamma Initiatives', 'role': 'Member'},
     ];
 
     // TODO: fetch organization data from database/service
@@ -32,6 +34,23 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
       backgroundColor: const Color(0xFFF6F7F8),
 
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color.fromARGB(255, 11, 83, 155),
+        onPressed: () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const CreateOrganizationScreen(),
+            ),
+          );
+        },
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          "Create Organization",
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
+      
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
         selectedItemColor: const Color(0xFF137FEC),
@@ -145,63 +164,138 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   }
 
   Widget _buildOrganizationCard(String name, String role, BuildContext context) {
-    return Material(
-      elevation: 2,
+  return Material(
+    elevation: 2,
+    borderRadius: BorderRadius.circular(12),
+    child: InkWell(
       borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          // navigate to organization's dashboard (placeholder)
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const OrganizationDashboard(),
-            ),
-          );
-        },
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 35, horizontal: 20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF137FEC),
-                Color.fromARGB(255, 33, 70, 113),
-              ],
-        ),
-            borderRadius: BorderRadius.circular(12),
+      onTap: () {
+        // navigate to organization's dashboard
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const OrganizationDashboard(),
           ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 255, 255, 255).withOpacity(.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.business, color: Color.fromARGB(255, 236, 236, 236)),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name, style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600, color: const Color.fromARGB(255, 243, 243, 243))),
-                    const SizedBox(height: 4),
-                    Text(role, style: GoogleFonts.inter(fontSize: 12, color: const Color.fromARGB(255, 222, 222, 222))),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: Color.fromARGB(255, 208, 208, 208)),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 35, horizontal: 20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF137FEC),
+              Color.fromARGB(255, 33, 70, 113),
             ],
           ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color.fromARGB(255, 255, 255, 255).withOpacity(.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.business,
+                color: Color.fromARGB(255, 236, 236, 236),
+              ),
+            ),
+            const SizedBox(width: 16),
+
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: GoogleFonts.inter(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: const Color.fromARGB(255, 243, 243, 243),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    role,
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: const Color.fromARGB(255, 222, 222, 222),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            PopupMenuButton<String>(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 6,
+              icon: const Icon(
+                Icons.more_vert,
+                color: Color.fromARGB(255, 208, 208, 208),
+              ),
+              onSelected: (value) {
+                if (value == 'leave') {
+                  // TODO: leave organization
+                }
+
+                if (value == 'edit') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const EditOrganizationScreen(),
+                    ),
+                  );
+                }
+              },
+              itemBuilder: (context) {
+                List<PopupMenuEntry<String>> items = [];
+
+                // Only admins can edit
+                if (role.toLowerCase() == "admin") {
+                  items.add(
+                    const PopupMenuItem(
+                      value: 'edit',
+                      child: Row(
+                        children: [
+                          Icon(Icons.edit, size: 18),
+                          SizedBox(width: 10),
+                          Text("Edit Organization"),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                items.add(
+                  const PopupMenuItem(
+                    value: 'leave',
+                    child: Row(
+                        children: [
+                          Icon(Icons.logout, size: 18),
+                          SizedBox(width: 10),
+                          Text("Leave Organization"),
+                        ],
+                    )
+                  ),
+                );
+
+                return items;
+              },
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildOrgEmptyState() {
     return Center(
@@ -221,13 +315,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                // TODO: navigate to join/create org screen
-              },
-              child: const Text('Join or Create'),
-            )
           ],
         ),
       ),
