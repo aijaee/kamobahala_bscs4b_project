@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         title: "Kamo Bahala",
 
-        home: const LoginScreen(),
+        home: const OrganizationDashboard(),
       ),
     );
   }

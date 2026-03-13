@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'financial_ledger.dart';
 
 class OrganizationDashboard extends StatelessWidget {
   const OrganizationDashboard({super.key});
@@ -8,7 +9,7 @@ class OrganizationDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // TOGGLE THIS: Set to true to see the "Empty State" UI
-    bool isDashboardEmpty = true;
+    bool isDashboardEmpty = false;
 
     final List<Map<String, dynamic>> deadlines = [
       {'title': 'Logistics', 'tasks': '3 tasks due today', 'icon': Icons.local_shipping, 'color': Colors.orange},
@@ -29,7 +30,7 @@ class OrganizationDashboard extends StatelessWidget {
                   padding: const EdgeInsets.all(16.0),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                      _buildFinancialCard(),
+                      _buildFinancialCard(context), // Pass context for navigation
                       const SizedBox(height: 24),
                       if (isDashboardEmpty)
                         _buildEmptyState()
@@ -121,7 +122,7 @@ class OrganizationDashboard extends StatelessWidget {
     );
   }
 
-  Widget _buildFinancialCard() {
+  Widget _buildFinancialCard(BuildContext context) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -165,7 +166,13 @@ class OrganizationDashboard extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           ElevatedButton(
-            onPressed: () {},
+            onPressed: () {
+              // Navigates to the Financial Ledger UI
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const FinancialLedgerScreen()),
+              );
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: const Color(0xFF137FEC),
