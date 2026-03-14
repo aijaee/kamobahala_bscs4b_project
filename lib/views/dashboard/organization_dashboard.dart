@@ -1,73 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import '../projects/projects_list.dart';
-import 'main_dashboard_screen.dart';
 
-class OrganizationDashboard extends StatefulWidget {
+class OrganizationDashboard extends StatelessWidget {
   const OrganizationDashboard({super.key});
-
-  @override
-  State<OrganizationDashboard> createState() => _OrganizationDashboardState();
-}
-
-class _OrganizationDashboardState extends State<OrganizationDashboard> {
-  // track bottom nav selection
-  int currentIndex = 0;
 
   @override
   Widget build(BuildContext context) {
     // TOGGLE THIS: Set to true to see the "Empty State" UI
-    // TODO: Replace with actual logic to determine if dashboard has content
-    bool isDashboardEmpty = false;
+    bool isDashboardEmpty = true;
 
     final List<Map<String, dynamic>> deadlines = [
       {'title': 'Logistics', 'tasks': '3 tasks due today', 'icon': Icons.local_shipping, 'color': Colors.orange},
-      {'title': 'Visuals', 'tasks': '5 tasks due tomorrow', 'icon': Icons.palette, 'color': Colors.purple},
-      {'title': 'Dev Ops', 'tasks': '1 task due on 3/15/26', 'icon': Icons.code, 'color': Colors.blue},
-      {'title': 'Marketing', 'tasks': '1 task due on 3/20/26', 'icon': Icons.campaign, 'color': Colors.green},
+      {'title': 'Visuals', 'tasks': '5 tasks this week', 'icon': Icons.palette, 'color': Colors.purple},
+      {'title': 'Dev Ops', 'tasks': '1 urgent patch', 'icon': Icons.code, 'color': Colors.blue},
+      {'title': 'Marketing', 'tasks': 'All clear', 'icon': Icons.campaign, 'color': Colors.green},
     ];
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F8),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex,
-        selectedItemColor: const Color(0xFF137FEC),
-        unselectedItemColor: Colors.grey,
-        onTap: (idx) {
-          setState(() {
-            currentIndex = idx;
-          });
-          // simple tab navigation placeholder
-          if (idx == 1) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const ProjectsList(),
-              ),
-            );
-          }
-          // TODO: handle other indexes for naviagtion
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded),
-            label: "Dashboard",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.assignment_outlined),
-            label: "Projects",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            label: "Finances",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: "Profile",
-          ),
-        ],
-      ),
       body: SafeArea(
         child: Stack(
           children: [
@@ -83,7 +34,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                       if (isDashboardEmpty)
                         _buildEmptyState()
                       else ...[
-                        _buildSectionHeader("Priority Deadlines", ""),
+                        _buildSectionHeader("Priority Deadlines", "View Calendar"),
                         const SizedBox(height: 12),
                         _buildDeadlinesGrid(deadlines),
                         const SizedBox(height: 24),
@@ -96,6 +47,12 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                   ),
                 ),
               ],
+            ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: _buildBottomNav(),
             ),
           ],
         ),
@@ -113,48 +70,50 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  // TODO: Replace with actual organization name
-                  "[Organization] Workspace",
+                  "Main Dashboard",
                   style: GoogleFonts.inter(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                     color: const Color(0xFF111418),
                   ),
                 ),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const MainDashboardScreen(),
-                              ),
-                            );
-                  },
-                  child: Stack(
-                    children: [
-                      // TODO: implement notifications (low priority) and show red dot only when there are unread notifications
-                      SvgPicture.asset(
-                        'assets/icons/bell.svg',
-                        width: 24,
-                        height: 24,
-                        placeholderBuilder: (context) => const Icon(Icons.notifications_none),
-                      ),
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
+                Stack(
+                  children: [
+                    SvgPicture.asset(
+                      'assets/icons/bell.svg',
+                      width: 24,
+                      height: 24,
+                      placeholderBuilder: (context) => const Icon(Icons.notifications_none),
+                    ),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
                         ),
-                      )
-                    ],
-                  ),
-                )
+                      ),
+                    )
+                  ],
+                ),
               ],
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              decoration: InputDecoration(
+                hintText: "Search tasks, projects, or finances",
+                prefixIcon: const Icon(Icons.search, size: 18),
+                filled: true,
+                fillColor: const Color(0xFFE5E7EB).withValues(alpha: 0.5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
             ),
           ],
         ),
@@ -167,14 +126,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF137FEC),
-            Color.fromARGB(255, 33, 70, 113),
-          ],
-        ),
+        color: const Color(0xFF137FEC),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -203,7 +155,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
             ],
           ),
           const SizedBox(height: 8),
-          // TODO: Replace with actual balance data
           Text(
             "P45,280.00",
             style: GoogleFonts.inter(
@@ -214,10 +165,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
           ),
           const SizedBox(height: 20),
           ElevatedButton(
-            // TODO: Implement financial details navigation
-            onPressed: () {
-              
-            },
+            onPressed: () {},
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: const Color(0xFF137FEC),
@@ -267,14 +215,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
           style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         TextButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => const ProjectsList(),
-              ),
-            );
-          },
+          onPressed: () {},
           child: Text(actionText, style: const TextStyle(color: Color(0xFF137FEC))),
         ),
       ],
@@ -326,7 +267,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          //TODO: Replace with actual project data
           _buildProjectCard("Project Phoenix", "Q3 Product Revamp", 0.75, "12 Days Left", const Color(0xFF137FEC)),
           const SizedBox(width: 16),
           _buildProjectCard("Global Retail", "Expansion Phase 1", 0.40, "45 Days Left", Colors.green),
@@ -349,29 +289,12 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1), 
-              borderRadius: BorderRadius.circular(8)
-              ),
-            child: Icon(
-              Icons.rocket_launch, 
-              color: color, 
-              size: 20
-              ),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            child: Icon(Icons.rocket_launch, color: color, size: 20),
           ),
           const SizedBox(height: 12),
-          Text(
-            title, 
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.bold, 
-              fontSize: 14)
-              ),
-          Text(
-            sub, 
-            style: GoogleFonts.inter(
-              color: Colors.grey,
-              fontSize: 12
-              )),
+          Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(sub, style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
           const Spacer(),
           LinearProgressIndicator(value: progress, backgroundColor: const Color(0xFFF3F4F6), color: color, borderRadius: BorderRadius.circular(10)),
           const SizedBox(height: 8),
@@ -384,6 +307,36 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
           )
         ],
       ),
+    );
+  }
+
+  Widget _buildBottomNav() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.9),
+        border: const Border(top: BorderSide(color: Color(0xFFF3F4F6))),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _navItem(Icons.grid_view_rounded, "Dashboard", true),
+          _navItem(Icons.assignment_outlined, "Projects", false),
+          _navItem(Icons.account_balance_wallet_outlined, "Finances", false),
+          _navItem(Icons.person_outline, "Profile", false),
+        ],
+      ),
+    );
+  }
+
+  Widget _navItem(IconData icon, String label, bool isActive) {
+    final color = isActive ? const Color(0xFF137FEC) : const Color(0xFF9CA3AF);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 22),
+        Text(label, style: GoogleFonts.inter(color: color, fontSize: 10, fontWeight: FontWeight.w500)),
+      ],
     );
   }
 }
