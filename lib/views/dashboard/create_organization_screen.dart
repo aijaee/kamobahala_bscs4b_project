@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/services/organization_service.dart';
 import 'main_dashboard_screen.dart';
 
 // Brand colors extracted from the "New Project" screen design
@@ -22,6 +24,7 @@ class CreateOrganizationScreen extends StatefulWidget {
 
 class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
   final _formKey = GlobalKey<FormState>();
+  final OrganizationService _organizationService = OrganizationService();
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
@@ -30,6 +33,20 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
   List<Map<String, dynamic>> members = [
     {"controller": TextEditingController(), "role": "Member"}
   ];
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    descriptionController.dispose();
+    budgetController.dispose();
+    for (final member in members) {
+      final controller = member['controller'];
+      if (controller is TextEditingController) {
+        controller.dispose();
+      }
+    }
+    super.dispose();
+  }
 
   // ── Shared input decoration ─────────────────────────────────────────────────
   InputDecoration _inputDecoration(String hint) {
@@ -205,7 +222,7 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
                     ),
                     onPressed: () {
                       if (_formKey.currentState!.validate()) {
-                        // TODO: create organization
+                        _createOrganization();
                       }
                     },
                     child: Text(
@@ -356,5 +373,57 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _createOrganization() async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final budget = double.tryParse(budgetController.text.trim()) ?? 0.0;
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('You must be logged in to create an organization.')),
+        );
+      return;
+    }
+    final data = {
+      'name': nameController.text.trim(),
+      'description': descriptionController.text.trim(),
+      'budget': budget,
+      'owner_id': userId,
+    };
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      await _organizationService.createOrganization(data);
+
+      if (!mounted) return;
+
+      navigator.pop();
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Organization created successfully.')),
+        );
+      navigator.pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainDashboardScreen()),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      navigator.pop();
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Failed to create organization: $error')),
+        );
+    }
   }
 }
