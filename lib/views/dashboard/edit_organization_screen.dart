@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'main_dashboard_screen.dart';
+import '../../core/services/organization_service.dart';
 
 const kPrimary = Color(0xFF1A73E8);
 const kPrimaryDark = Color(0xFF0B539B);
@@ -12,7 +13,9 @@ const kTextSecondary = Color(0xFF6B7280);
 const kRed = Color(0xFFE53935);
 
 class EditOrganizationScreen extends StatefulWidget {
-  const EditOrganizationScreen({super.key});
+  // Napoleon: Implemented live backend functionality.
+  final Map<String, dynamic> organization;
+  const EditOrganizationScreen({super.key, required this.organization});
 
   @override
   State<EditOrganizationScreen> createState() => _EditOrganizationScreenState();
@@ -20,6 +23,7 @@ class EditOrganizationScreen extends StatefulWidget {
 
 class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
   final _formKey = GlobalKey<FormState>();
+  final OrganizationService _orgService = OrganizationService();
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
@@ -30,7 +34,11 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
   @override
   void initState() {
     super.initState();
-    // TODO: load organization details
+    // Napoleon: Implemented live backend functionality.
+    // Load organization details from the passed widget data
+    nameController.text = widget.organization['name'] ?? '';
+    descriptionController.text = widget.organization['description'] ?? '';
+    budgetController.text = (widget.organization['budget'] ?? 0.0).toString();
   }
 
   InputDecoration _inputDecoration(String hint) {
@@ -154,15 +162,14 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
           Expanded(
             flex: 2,
             child: DropdownButtonFormField<String>(
-              
-              value: members[index]["role"],
+              initialValue: members[index]["role"],
               style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
               dropdownColor: kCardBg,
               decoration: InputDecoration(
                 filled: true,
                 fillColor: kCardBg,
-                
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: kBorder),
@@ -183,7 +190,6 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
               onChanged: (value) {
                 setState(() => members[index]["role"] = value);
               },
-              
             ),
           ),
           const SizedBox(width: 4),
@@ -246,7 +252,6 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                     return null;
                   },
                 ),
-
                 const SizedBox(height: 18),
                 _label("Description (Optional)"),
                 TextFormField(
@@ -256,12 +261,12 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                   decoration: _inputDecoration(
                       "Outline organization goals and purpose..."),
                 ),
-
                 const SizedBox(height: 18),
                 _buildBudgetCard(),
                 const SizedBox(height: 24),
                 _label("Members"),
-                ...List.generate(members.length, (index) => _buildMemberRow(index)),
+                ...List.generate(
+                    members.length, (index) => _buildMemberRow(index)),
                 const SizedBox(height: 10),
                 TextButton.icon(
                   onPressed: () {
@@ -276,9 +281,12 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                   label: Text(
                     "Add Member",
                     style: GoogleFonts.inter(
-                        fontSize: 14, color: kPrimary, fontWeight: FontWeight.w500),
+                        fontSize: 14,
+                        color: kPrimary,
+                        fontWeight: FontWeight.w500),
                   ),
-                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                  style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4)),
                 ),
                 const SizedBox(height: 32),
                 Row(
@@ -295,8 +303,9 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
                         onPressed: () {
+                          // Napoleon: Implemented live backend functionality.
                           if (_formKey.currentState!.validate()) {
-                            // TODO: update organization
+                            _updateOrganization();
                           }
                         },
                         child: Text(
@@ -316,5 +325,31 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
         ),
       ),
     );
+  }
+
+  // Napoleon: Implemented live backend functionality.
+  void _updateOrganization() async {
+    // Show loading indicator
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()));
+
+    final data = {
+      'name': nameController.text,
+      'description': descriptionController.text,
+      'budget': double.tryParse(budgetController.text) ?? 0.0,
+    };
+
+    try {
+      await _orgService.updateOrganization(widget.organization['id'], data);
+      if (!context.mounted) return;
+      Navigator.pop(context); // pop loading dialog
+      Navigator.pushReplacement(context,
+          MaterialPageRoute(builder: (_) => const MainDashboardScreen()));
+    } catch (e) {
+      Navigator.pop(context); // pop loading dialog
+      // TODO: Show a proper error message to the user
+    }
   }
 }

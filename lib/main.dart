@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'viewmodels/auth_viewmodel.dart';
-import 'views/auth/login_screen.dart';
 // 1. ADD THIS IMPORT (Adjust the path if your folder names are different)
-import 'views/dashboard/organization_dashboard.dart';
+import 'views/auth/login_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Supabase connection
+  await Supabase.initialize(
+    // Napoleon: Standardized navigation, secured config keys, and implemented dynamic data fetching.
+    url: const String.fromEnvironment('SUPABASE_URL',
+        defaultValue: 'https://haqgdinogdtdfgdepnwk.supabase.co'),
+    anonKey: const String.fromEnvironment('SUPABASE_ANON_KEY',
+        defaultValue: 'sb_publishable_4-KIYQv6T-YRNspZqTn1oQ_KkEOfgET'),
+  );
+
   runApp(const MyApp());
 }
 
@@ -21,8 +32,7 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: "Kamo Bahala",
-
-        home: const OrganizationDashboard(),
+        home: const LoginScreen(),
       ),
     );
   }

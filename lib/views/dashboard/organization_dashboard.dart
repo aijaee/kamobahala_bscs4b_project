@@ -2,9 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'financial_ledger.dart';
+import '../projects/projects_list.dart';
 
-class OrganizationDashboard extends StatelessWidget {
-  const OrganizationDashboard({super.key});
+class OrganizationDashboard extends StatefulWidget {
+  final Map<String, dynamic> organization;
+  const OrganizationDashboard({super.key, required this.organization});
+
+  @override
+  State<OrganizationDashboard> createState() => _OrganizationDashboardState();
+}
+
+class _OrganizationDashboardState extends State<OrganizationDashboard> {
+  int _selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -12,10 +21,30 @@ class OrganizationDashboard extends StatelessWidget {
     bool isDashboardEmpty = false;
 
     final List<Map<String, dynamic>> deadlines = [
-      {'title': 'Logistics', 'tasks': '3 tasks due today', 'icon': Icons.local_shipping, 'color': Colors.orange},
-      {'title': 'Visuals', 'tasks': '5 tasks this week', 'icon': Icons.palette, 'color': Colors.purple},
-      {'title': 'Dev Ops', 'tasks': '1 urgent patch', 'icon': Icons.code, 'color': Colors.blue},
-      {'title': 'Marketing', 'tasks': 'All clear', 'icon': Icons.campaign, 'color': Colors.green},
+      {
+        'title': 'Logistics',
+        'tasks': '3 tasks due today',
+        'icon': Icons.local_shipping,
+        'color': Colors.orange
+      },
+      {
+        'title': 'Visuals',
+        'tasks': '5 tasks this week',
+        'icon': Icons.palette,
+        'color': Colors.purple
+      },
+      {
+        'title': 'Dev Ops',
+        'tasks': '1 urgent patch',
+        'icon': Icons.code,
+        'color': Colors.blue
+      },
+      {
+        'title': 'Marketing',
+        'tasks': 'All clear',
+        'icon': Icons.campaign,
+        'color': Colors.green
+      },
     ];
 
     return Scaffold(
@@ -30,12 +59,14 @@ class OrganizationDashboard extends StatelessWidget {
                   padding: const EdgeInsets.all(16.0),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
-                      _buildFinancialCard(context), // Pass context for navigation
+                      _buildFinancialCard(
+                          context), // Pass context for navigation
                       const SizedBox(height: 24),
                       if (isDashboardEmpty)
                         _buildEmptyState()
                       else ...[
-                        _buildSectionHeader("Priority Deadlines", "View Calendar"),
+                        _buildSectionHeader(
+                            "Priority Deadlines", "View Calendar"),
                         const SizedBox(height: 12),
                         _buildDeadlinesGrid(deadlines),
                         const SizedBox(height: 24),
@@ -71,7 +102,8 @@ class OrganizationDashboard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "Main Dashboard",
+                  // Napoleon: Standardized navigation, secured config keys, and implemented dynamic data fetching.
+                  widget.organization['name'] ?? 'Organization',
                   style: GoogleFonts.inter(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
@@ -84,7 +116,8 @@ class OrganizationDashboard extends StatelessWidget {
                       'assets/icons/bell.svg',
                       width: 24,
                       height: 24,
-                      placeholderBuilder: (context) => const Icon(Icons.notifications_none),
+                      placeholderBuilder: (context) =>
+                          const Icon(Icons.notifications_none),
                     ),
                     Positioned(
                       right: 0,
@@ -152,7 +185,8 @@ class OrganizationDashboard extends StatelessWidget {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const Icon(Icons.visibility_outlined, color: Colors.white, size: 18),
+              const Icon(Icons.visibility_outlined,
+                  color: Colors.white, size: 18),
             ],
           ),
           const SizedBox(height: 8),
@@ -170,7 +204,9 @@ class OrganizationDashboard extends StatelessWidget {
               // Navigates to the Financial Ledger UI
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const FinancialLedgerScreen()),
+                MaterialPageRoute(
+                    builder: (context) => FinancialLedgerScreen(
+                        organization: widget.organization)),
               );
             },
             style: ElevatedButton.styleFrom(
@@ -195,11 +231,15 @@ class OrganizationDashboard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 60),
         child: Column(
           children: [
-            Icon(Icons.assignment_add, size: 80, color: Colors.grey.withValues(alpha: 0.3)),
+            Icon(Icons.assignment_add,
+                size: 80, color: Colors.grey.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             Text(
               "No Active Projects Yet",
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey[700]),
+              style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[700]),
             ),
             const SizedBox(height: 8),
             Text(
@@ -223,7 +263,8 @@ class OrganizationDashboard extends StatelessWidget {
         ),
         TextButton(
           onPressed: () {},
-          child: Text(actionText, style: const TextStyle(color: Color(0xFF137FEC))),
+          child: Text(actionText,
+              style: const TextStyle(color: Color(0xFF137FEC))),
         ),
       ],
     );
@@ -256,11 +297,17 @@ class OrganizationDashboard extends StatelessWidget {
                 children: [
                   Icon(item['icon'], size: 16, color: item['color']),
                   const SizedBox(width: 8),
-                  Text(item['title'], style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w600)),
+                  Text(item['title'],
+                      style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
               const Spacer(),
-              Text(item['tasks'], style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold)),
+              Text(item['tasks'],
+                  style: GoogleFonts.inter(
+                      fontSize: 14, fontWeight: FontWeight.bold)),
             ],
           ),
         );
@@ -274,15 +321,18 @@ class OrganizationDashboard extends StatelessWidget {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          _buildProjectCard("Project Phoenix", "Q3 Product Revamp", 0.75, "12 Days Left", const Color(0xFF137FEC)),
+          _buildProjectCard("Project Phoenix", "Q3 Product Revamp", 0.75,
+              "12 Days Left", const Color(0xFF137FEC)),
           const SizedBox(width: 16),
-          _buildProjectCard("Global Retail", "Expansion Phase 1", 0.40, "45 Days Left", Colors.green),
+          _buildProjectCard("Global Retail", "Expansion Phase 1", 0.40,
+              "45 Days Left", Colors.green),
         ],
       ),
     );
   }
 
-  Widget _buildProjectCard(String title, String sub, double progress, String days, Color color) {
+  Widget _buildProjectCard(
+      String title, String sub, double progress, String days, Color color) {
     return Container(
       width: 240,
       padding: const EdgeInsets.all(16),
@@ -296,20 +346,30 @@ class OrganizationDashboard extends StatelessWidget {
         children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8)),
             child: Icon(Icons.rocket_launch, color: color, size: 20),
           ),
           const SizedBox(height: 12),
-          Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(title,
+              style:
+                  GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
           Text(sub, style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
           const Spacer(),
-          LinearProgressIndicator(value: progress, backgroundColor: const Color(0xFFF3F4F6), color: color, borderRadius: BorderRadius.circular(10)),
+          LinearProgressIndicator(
+              value: progress,
+              backgroundColor: const Color(0xFFF3F4F6),
+              color: color,
+              borderRadius: BorderRadius.circular(10)),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("${(progress * 100).toInt()}% Complete", style: const TextStyle(fontSize: 10, color: Colors.grey)),
-              Text(days, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              Text("${(progress * 100).toInt()}% Complete",
+                  style: const TextStyle(fontSize: 10, color: Colors.grey)),
+              Text(days,
+                  style: const TextStyle(fontSize: 10, color: Colors.grey)),
             ],
           )
         ],
@@ -318,32 +378,57 @@ class OrganizationDashboard extends StatelessWidget {
   }
 
   Widget _buildBottomNav() {
+    // Napoleon: Removed BottomNav from Org Selection and consolidated logic in Main Dashboard.
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.9),
         border: const Border(top: BorderSide(color: Color(0xFFF3F4F6))),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          _navItem(Icons.grid_view_rounded, "Dashboard", true),
-          _navItem(Icons.assignment_outlined, "Projects", false),
-          _navItem(Icons.account_balance_wallet_outlined, "Finances", false),
-          _navItem(Icons.person_outline, "Profile", false),
+      child: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) {
+          if (index == 1) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => ProjectsList(
+                      initialIndex: 1, organization: widget.organization)),
+            );
+          } else if (index == 2) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => FinancialLedgerScreen(
+                      initialIndex: 2, organization: widget.organization)),
+            );
+          } else {
+            setState(() {
+              _selectedIndex = index;
+            });
+          }
+          // TODO: Handle Profile navigation
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        selectedItemColor: const Color(0xFF137FEC),
+        unselectedItemColor: const Color(0xFF9CA3AF),
+        showUnselectedLabels: true,
+        selectedFontSize: 10,
+        unselectedFontSize: 10,
+        items: const [
+          BottomNavigationBarItem(
+              icon: Icon(Icons.grid_view_rounded), label: "Dashboard"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.assignment_outlined), label: "Projects"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              label: "Finances"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline), label: "Profile"),
         ],
       ),
-    );
-  }
-
-  Widget _navItem(IconData icon, String label, bool isActive) {
-    final color = isActive ? const Color(0xFF137FEC) : const Color(0xFF9CA3AF);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: color, size: 22),
-        Text(label, style: GoogleFonts.inter(color: color, fontSize: 10, fontWeight: FontWeight.w500)),
-      ],
     );
   }
 }

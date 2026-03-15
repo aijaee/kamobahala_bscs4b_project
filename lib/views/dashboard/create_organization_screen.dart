@@ -3,14 +3,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'main_dashboard_screen.dart';
 
 // Brand colors extracted from the "New Project" screen design
-const kPrimary = Color(0xFF1A73E8);       // Bright blue (buttons, links, icons)
-const kPrimaryDark = Color(0xFF0B539B);   // Deep blue (elevated button bg)
-const kSurface = Color(0xFFF5F7FA);       // Light gray page background
-const kCardBg = Color(0xFFFFFFFF);        // White card / input background
-const kBorder = Color(0xFFDDE1E7);        // Subtle border color
-const kTextPrimary = Color(0xFF1A1D23);   // Near-black headings
+const kPrimary = Color(0xFF1A73E8); // Bright blue (buttons, links, icons)
+const kPrimaryDark = Color(0xFF0B539B); // Deep blue (elevated button bg)
+const kSurface = Color(0xFFF5F7FA); // Light gray page background
+const kCardBg = Color(0xFFFFFFFF); // White card / input background
+const kBorder = Color(0xFFDDE1E7); // Subtle border color
+const kTextPrimary = Color(0xFF1A1D23); // Near-black headings
 const kTextSecondary = Color(0xFF6B7280); // Gray hint / label text
-const kRed = Color(0xFFE53935);           // Cancel / delete red
+const kRed = Color(0xFFE53935); // Cancel / delete red
 
 class CreateOrganizationScreen extends StatefulWidget {
   const CreateOrganizationScreen({super.key});
@@ -94,8 +94,8 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
         leading: IconButton(
           icon: const Icon(
             Icons.close, // "X" icon
-            color: kRed,  // your red color constant
-            size: 24,     // adjust size if needed
+            color: kRed, // your red color constant
+            size: 24, // adjust size if needed
           ),
           onPressed: () => Navigator.pushReplacement(
             context,
@@ -124,7 +124,6 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
                 // ── Organization Name ────────────────────────────────────────
                 _label("Organization Name"),
                 TextFormField(
@@ -147,7 +146,8 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
                   controller: descriptionController,
                   maxLines: 4,
                   style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
-                  decoration: _inputDecoration("Outline organization goals and purpose..."),
+                  decoration: _inputDecoration(
+                      "Outline organization goals and purpose..."),
                 ),
 
                 const SizedBox(height: 18),
@@ -159,7 +159,8 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
 
                 // ── Members ──────────────────────────────────────────────────
                 _label("Members"),
-                ...List.generate(members.length, (index) => _buildMemberRow(index)),
+                ...List.generate(
+                    members.length, (index) => _buildMemberRow(index)),
 
                 const SizedBox(height: 10),
 
@@ -277,7 +278,8 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
               ),
               filled: true,
               fillColor: kCardBg,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
@@ -314,15 +316,14 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
           Expanded(
             flex: 2,
             child: DropdownButtonFormField<String>(
-              
-              value: members[index]["role"],
+              initialValue: members[index]["role"],
               style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
               dropdownColor: kCardBg,
               decoration: InputDecoration(
                 filled: true,
                 fillColor: kCardBg,
-                
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: kBorder),
@@ -343,7 +344,6 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
               onChanged: (value) {
                 setState(() => members[index]["role"] = value);
               },
-              
             ),
           ),
           const SizedBox(width: 4),
