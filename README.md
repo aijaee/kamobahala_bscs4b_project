@@ -13,12 +13,8 @@ Bahala allows users to track income and expenses, manage projects, monitor budge
 **LYNCOLIN G. DELIGERO**  
 **NAPOLEON III T. CORTEZ**
 
-**Course:** BSCS 4B  
+**Course & Section:** BSCS 4B  
 **Subject:** Emerging Trends + Mobile Development Project
-
-## 👤 Author
-
-**Kamo Bahala Team** - BSCS 4B
 
 ## 📝 License
 
