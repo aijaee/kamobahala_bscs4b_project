@@ -12,9 +12,9 @@ void main() async {
   await Supabase.initialize(
     // Napoleon: Standardized navigation, secured config keys, and implemented dynamic data fetching.
     url: const String.fromEnvironment('SUPABASE_URL',
-        defaultValue: 'https://haqgdinogdtdfgdepnwk.supabase.co'),
+        defaultValue: 'https://amsjmwqryadpdqqaccdd.supabase.co'),
     anonKey: const String.fromEnvironment('SUPABASE_ANON_KEY',
-        defaultValue: 'sb_publishable_4-KIYQv6T-YRNspZqTn1oQ_KkEOfgET'),
+        defaultValue: 'sb_publishable_uleIRBilKfGYYjsYZyJOCA_omfSpd6e'),
   );
 
   runApp(const MyApp());

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../../core/services/financial_service.dart';
 import 'financial_ledger.dart';
 import '../projects/projects_list.dart';
 
@@ -14,12 +15,27 @@ class OrganizationDashboard extends StatefulWidget {
 
 class _OrganizationDashboardState extends State<OrganizationDashboard> {
   int _selectedIndex = 0;
+  final FinancialService _financialService = FinancialService();
+  late Future<double> _balanceFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _balanceFuture = _loadBalance();
+  }
+
+  Future<double> _loadBalance() async {
+    try {
+      final transactions = await _financialService
+          .fetchTransactions(widget.organization['id'].toString());
+      return _financialService.calculateBalance(widget.organization, transactions);
+    } catch (_) {
+      return double.tryParse(widget.organization['budget']?.toString() ?? '') ?? 0;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // TOGGLE THIS: Set to true to see the "Empty State" UI
-    bool isDashboardEmpty = false;
-
     final List<Map<String, dynamic>> deadlines = [
       {
         'title': 'Logistics',
@@ -62,18 +78,13 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                       _buildFinancialCard(
                           context), // Pass context for navigation
                       const SizedBox(height: 24),
-                      if (isDashboardEmpty)
-                        _buildEmptyState()
-                      else ...[
-                        _buildSectionHeader(
-                            "Priority Deadlines", "View Calendar"),
-                        const SizedBox(height: 12),
-                        _buildDeadlinesGrid(deadlines),
-                        const SizedBox(height: 24),
-                        _buildSectionHeader("Active Projects", "See All"),
-                        const SizedBox(height: 12),
-                        _buildProjectsList(),
-                      ],
+                      _buildSectionHeader("Priority Deadlines", "View Calendar"),
+                      const SizedBox(height: 12),
+                      _buildDeadlinesGrid(deadlines),
+                      const SizedBox(height: 24),
+                      _buildSectionHeader("Active Projects", "See All"),
+                      const SizedBox(height: 12),
+                      _buildProjectsList(),
                       const SizedBox(height: 100),
                     ]),
                   ),
@@ -190,13 +201,22 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
             ],
           ),
           const SizedBox(height: 8),
-          Text(
-            "P45,280.00",
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 30,
-              fontWeight: FontWeight.bold,
-            ),
+          FutureBuilder<double>(
+            future: _balanceFuture,
+            builder: (context, snapshot) {
+              final balance = snapshot.data ??
+                  (double.tryParse(widget.organization['budget']?.toString() ?? '') ??
+                      0);
+
+              return Text(
+                _formatCurrency(balance),
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                ),
+              );
+            },
           ),
           const SizedBox(height: 20),
           ElevatedButton(
@@ -225,32 +245,23 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 60),
-        child: Column(
-          children: [
-            Icon(Icons.assignment_add,
-                size: 80, color: Colors.grey.withValues(alpha: 0.3)),
-            const SizedBox(height: 16),
-            Text(
-              "No Active Projects Yet",
-              style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[700]),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "Get started by creating your first organization task or project.",
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(color: Colors.grey[500]),
-            ),
-          ],
-        ),
-      ),
-    );
+  String _formatCurrency(double amount) {
+    final absolute = amount.abs().toStringAsFixed(2);
+    final parts = absolute.split('.');
+    final whole = parts[0];
+    final decimals = parts[1];
+    final buffer = StringBuffer();
+
+    for (var index = 0; index < whole.length; index++) {
+      final reversedIndex = whole.length - index;
+      buffer.write(whole[index]);
+      if (reversedIndex > 1 && reversedIndex % 3 == 1) {
+        buffer.write(',');
+      }
+    }
+
+    final prefix = amount < 0 ? '-₱' : '₱';
+    return '$prefix${buffer.toString()}.$decimals';
   }
 
   Widget _buildSectionHeader(String title, String actionText) {
