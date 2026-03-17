@@ -21,12 +21,14 @@ class CreateOrganizationScreen extends StatefulWidget {
 }
 
 class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
+  // TODO: [MVVM] move state and service into CreateOrganizationViewModel
   final _formKey = GlobalKey<FormState>();
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController budgetController = TextEditingController();
 
+  // TODO: [MVVM] build member list state in ViewModel; avoid TextEditingController in widget state if possible
   List<Map<String, dynamic>> members = [
     {"controller": TextEditingController(), "role": "Member"}
   ];
@@ -83,6 +85,7 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // TODO: [MVVM] convert this to use ChangeNotifierProvider<CreateOrganizationViewModel>
     return Scaffold(
       backgroundColor: kSurface,
 
@@ -164,6 +167,7 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
                 const SizedBox(height: 10),
 
                 // ── Add Member Button ────────────────────────────────────────
+                // TODO: [MVVM] wire this to ViewModel.addMember() for member list logic
                 TextButton.icon(
                   onPressed: () {
                     setState(() {
@@ -203,6 +207,7 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 15),
                     ),
                     onPressed: () {
+                      // TODO: [MVVM] call ViewModel.createOrganization() and drive navigation/snackbar from state
                       if (_formKey.currentState!.validate()) {
                         // TODO: create organization
                       }
@@ -357,4 +362,61 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
       ),
     );
   }
+<<<<<<< Updated upstream
 }
+=======
+
+  Future<void> _createOrganization() async {
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final budget = double.tryParse(budgetController.text.trim()) ?? 0.0;
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('You must be logged in to create an organization.')),
+        );
+      return;
+    }
+    final data = {
+      'name': nameController.text.trim(),
+      'description': descriptionController.text.trim(),
+      'budget': budget,
+      'owner_id': userId,
+    };
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    // TODO: [MVVM] move service error handling and response logic into ViewModel
+    try {
+      await _organizationService.createOrganization(data);
+
+      if (!mounted) return;
+
+      navigator.pop();
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('Organization created successfully.')),
+        );
+      navigator.pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainDashboardScreen()),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      navigator.pop();
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('Failed to create organization: $error')),
+        );
+    }
+  }
+}
+>>>>>>> Stashed changes

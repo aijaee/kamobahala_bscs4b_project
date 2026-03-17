@@ -1,0 +1,495 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'projects_list.dart';
+
+// ── Brand constants (shared with CreateOrganizationScreen) ───────────────────
+// TODO: [Static] this file is currently using static edit data; switch to ViewModel/Service data source
+const kPrimary = Color(0xFF1A73E8);
+const kPrimaryDark = Color(0xFF0B539B);
+const kSurface = Color(0xFFF5F7FA);
+const kCardBg = Color(0xFFFFFFFF);
+const kBorder = Color(0xFFDDE1E7);
+const kTextPrimary = Color(0xFF1A1D23);
+const kTextSecondary = Color(0xFF6B7280);
+const kRed = Color(0xFFE53935);
+
+class EditProjectScreen extends StatefulWidget {
+  // TODO: [MVVM] project object should be part of ViewModel state; pass only ID/context in View constructor
+  final Map<String, dynamic>? project;
+  final Map<String, dynamic> organization;
+  const EditProjectScreen({super.key, this.project, required this.organization});
+
+  @override
+  State<EditProjectScreen> createState() => _EditProjectScreenState();
+}
+
+class _EditProjectScreenState extends State<EditProjectScreen> {
+  final _formKey = GlobalKey<FormState>();
+  
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController descriptionController = TextEditingController();
+  final TextEditingController budgetController = TextEditingController();
+
+  DateTime? startDate;
+  DateTime? endDate;
+
+  @override
+  void initState() {
+    super.initState();
+    // TODO: [Static] replace with data from ViewModel / API for selected project
+    final existing = widget.project ?? {
+      'name': 'Q4 Marketing Campaign',
+      'description': 'Improve brand reach and lead generation.',
+      'budget': '85000',
+      'startDate': DateTime.now().subtract(Duration(days: 14)),
+      'endDate': DateTime.now().add(Duration(days: 76)),
+    };
+
+    nameController.text = existing['name']?.toString() ?? '';
+    descriptionController.text = existing['description']?.toString() ?? '';
+    budgetController.text = existing['budget']?.toString() ?? '';
+
+    startDate = existing['startDate'] is DateTime
+        ? existing['startDate']
+        : DateTime.now().subtract(Duration(days: 14));
+    endDate = existing['endDate'] is DateTime
+        ? existing['endDate']
+        : DateTime.now().add(Duration(days: 76));
+  }
+
+  // ── Shared input decoration ─────────────────────────────────────────────────
+  InputDecoration _inputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: GoogleFonts.inter(fontSize: 14, color: kTextSecondary),
+      filled: true,
+      fillColor: kCardBg,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: kBorder),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: kBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: kPrimary, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: kRed),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: kRed, width: 1.5),
+      ),
+    );
+  }
+
+  // ── Section label ────────────────────────────────────────────────────────────
+  Widget _label(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: kTextPrimary,
+          letterSpacing: 0.1,
+        ),
+      ),
+    );
+  }
+
+  // ── Date picker helper ───────────────────────────────────────────────────────
+  Future<void> _pickDate({required bool isStart}) async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: isStart ? (startDate ?? now) : (endDate ?? now),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: kPrimary,
+              onPrimary: Colors.white,
+              surface: kCardBg,
+              onSurface: kTextPrimary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() {
+        if (isStart) {
+          startDate = picked;
+        } else {
+          endDate = picked;
+        }
+      });
+    }
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return "Select...";
+    return "${_monthAbbr(date.month)} ${date.day}, ${date.year}";
+  }
+
+  String _monthAbbr(int month) {
+    const months = [
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+    ];
+    return months[month - 1];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // TODO: [MVVM] this screen should consume CreateProjectViewModel for submit state, validation, and save
+    return Scaffold(
+      backgroundColor: kSurface,
+
+      // ── AppBar ──────────────────────────────────────────────────────────────
+      appBar: AppBar(
+        backgroundColor: kCardBg,
+        elevation: 0,
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: kRed),
+          onPressed: () => Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization)),
+          ),
+        ),
+        title: Text(
+          "Edit Project",
+          style: GoogleFonts.inter(
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: kTextPrimary,
+          ),
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(1),
+          child: Divider(height: 1, color: kBorder),
+        ),
+      ),
+
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                // ── Project Name ─────────────────────────────────────────────
+                _label("Project Name"),
+                TextFormField(
+                  controller: nameController,
+                  style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
+                  decoration: _inputDecoration("e.g. Q4 Marketing Campaign"),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return "Project name is required";
+                    }
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 18),
+
+                // ── Description ──────────────────────────────────────────────
+                _label("Description"),
+                TextFormField(
+                  controller: descriptionController,
+                  maxLines: 4,
+                  style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
+                  decoration: _inputDecoration("Outline project goals and deliverables..."),
+                ),
+
+                const SizedBox(height: 18),
+
+                // ── Project Timeline ─────────────────────────────────────────
+                _buildTimelineCard(),
+
+                const SizedBox(height: 14),
+
+                // ── Budget Allocation ────────────────────────────────────────
+                _buildBudgetCard(),
+
+                const SizedBox(height: 32),
+
+                // ── Create Project Button ────────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: kPrimary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                    ),
+                    onPressed: () {
+                      // TODO: [MVVM] call viewModel.updateProject(...) and handle response state in provider
+                      if (_formKey.currentState!.validate()) {
+                        // TODO: sample static update flow for UI:
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Project saved (static mock)')),
+                        );
+                      }
+                    },
+                    child: Text(
+                      "Save Changes",
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Project Timeline Card ────────────────────────────────────────────────────
+  Widget _buildTimelineCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: kCardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Project Timeline",
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: kTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              // Start Date
+              Expanded(child: _buildDateField(label: "START DATE", isStart: true)),
+              const SizedBox(width: 12),
+              // End Date
+              Expanded(child: _buildDateField(label: "END DATE", isStart: false)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateField({required String label, required bool isStart}) {
+    final date = isStart ? startDate : endDate;
+    final isPlaceholder = date == null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            color: kTextSecondary,
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: () => _pickDate(isStart: isStart),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            decoration: BoxDecoration(
+              color: kSurface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: kBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.calendar_today_outlined,
+                  size: 15,
+                  color: isPlaceholder ? kTextSecondary : kPrimary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _formatDate(date),
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: isPlaceholder ? kTextSecondary : kTextPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Budget Allocation Card ───────────────────────────────────────────────────
+  Widget _buildBudgetCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: kCardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: kBorder),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            children: [
+              const Icon(Icons.account_balance, size: 18, color: kPrimary),
+              const SizedBox(width: 8),
+              Text(
+                "Budget Allocation",
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: kTextPrimary,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: kPrimary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  "LINKED TO DEPOSITORY",
+                  style: GoogleFonts.inter(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: kPrimary,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+
+          // Amount input
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: kCardBg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: kBorder),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  "₱",
+                  style: GoogleFonts.inter(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w500,
+                    color: kTextPrimary,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: TextFormField(
+                    controller: budgetController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    style: GoogleFonts.inter(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w500,
+                      color: kTextPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: "0.00",
+                      hintStyle: GoogleFonts.inter(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w500,
+                        color: kTextSecondary,
+                      ),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 10),
+          Divider(color: kBorder, height: 1),
+          const SizedBox(height: 10),
+
+          // Central Depository Balance row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Central Depository Balance",
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: kTextSecondary,
+                ),
+              ),
+              Text(
+                 // TODO: replace with dynamic balance
+                "₱142,500.00",
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: kTextPrimary,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            "Funds will be locked upon project creation.",
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              color: kTextSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

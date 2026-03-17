@@ -19,18 +19,29 @@ class EditOrganizationScreen extends StatefulWidget {
 }
 
 class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
+  // TODO: [MVVM] move organization state and service calls into EditOrganizationViewModel
   final _formKey = GlobalKey<FormState>();
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController budgetController = TextEditingController();
 
+  // TODO: [MVVM] manage members list in ViewModel instead of widget state when possible
   List<Map<String, dynamic>> members = [];
 
   @override
   void initState() {
     super.initState();
+<<<<<<< Updated upstream
     // TODO: load organization details
+=======
+    // TODO: [MVVM] initialize ViewModel with widget.organization and remove text controller preset logic from view
+    // Napoleon: Implemented live backend functionality.
+    // Load organization details from the passed widget data
+    nameController.text = widget.organization['name'] ?? '';
+    descriptionController.text = widget.organization['description'] ?? '';
+    budgetController.text = (widget.organization['budget'] ?? 0.0).toString();
+>>>>>>> Stashed changes
   }
 
   InputDecoration _inputDecoration(String hint) {
@@ -263,6 +274,7 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                 _label("Members"),
                 ...List.generate(members.length, (index) => _buildMemberRow(index)),
                 const SizedBox(height: 10),
+                // TODO: [MVVM] delegate member addition to ViewModel.addMember()
                 TextButton.icon(
                   onPressed: () {
                     setState(() {
@@ -295,6 +307,11 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
                         onPressed: () {
+<<<<<<< Updated upstream
+=======
+                          // TODO: [MVVM] call ViewModel.updateOrganization() instead of direct method
+                          // Napoleon: Implemented live backend functionality.
+>>>>>>> Stashed changes
                           if (_formKey.currentState!.validate()) {
                             // TODO: update organization
                           }
@@ -317,4 +334,35 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
       ),
     );
   }
+<<<<<<< Updated upstream
 }
+=======
+
+  // TODO: [MVVM] move update logic to ViewModel and convert to async state updates
+  // Napoleon: Implemented live backend functionality.
+  void _updateOrganization() async {
+    // Show loading indicator
+    showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()));
+
+    final data = {
+      'name': nameController.text,
+      'description': descriptionController.text,
+      'budget': double.tryParse(budgetController.text) ?? 0.0,
+    };
+
+    try {
+      await _orgService.updateOrganization(widget.organization['id'], data);
+      if (!context.mounted) return;
+      Navigator.pop(context); // pop loading dialog
+      Navigator.pushReplacement(context,
+          MaterialPageRoute(builder: (_) => const MainDashboardScreen()));
+    } catch (e) {
+      Navigator.pop(context); // pop loading dialog
+      // TODO: Show a proper error message to the user
+    }
+  }
+}
+>>>>>>> Stashed changes

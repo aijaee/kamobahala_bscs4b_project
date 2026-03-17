@@ -12,8 +12,32 @@ class OrganizationDashboard extends StatefulWidget {
 }
 
 class _OrganizationDashboardState extends State<OrganizationDashboard> {
+<<<<<<< Updated upstream
   // track bottom nav selection
   int currentIndex = 0;
+=======
+  // TODO: [MVVM] move UI state (selectedIndex, balance fetch) into OrganizationDashboardViewModel
+  int _selectedIndex = 0;
+  final FinancialService _financialService = FinancialService();
+  late Future<double> _balanceFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _balanceFuture = _loadBalance();
+  }
+
+  // TODO: [MVVM] replace with ViewModel.loadBalance() and observe via Provider/Consumer
+  Future<double> _loadBalance() async {
+    try {
+      final transactions = await _financialService
+          .fetchTransactions(widget.organization['id'].toString());
+      return _financialService.calculateBalance(widget.organization, transactions);
+    } catch (_) {
+      return double.tryParse(widget.organization['budget']?.toString() ?? '') ?? 0;
+    }
+  }
+>>>>>>> Stashed changes
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +102,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                   padding: const EdgeInsets.all(16.0),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
+<<<<<<< Updated upstream
                       _buildFinancialCard(),
                       const SizedBox(height: 24),
                       if (isDashboardEmpty)
@@ -91,6 +116,33 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                         const SizedBox(height: 12),
                         _buildProjectsList(),
                       ],
+=======
+                      // TODO: [MVVM] use ViewModel.balance and avoid FutureBuilder in view
+                      _buildFinancialCard(
+                          context), // Pass context for navigation
+                      const SizedBox(height: 24),
+                      _buildSectionHeader("Priority Deadlines", "View Calendar"),
+                      const SizedBox(height: 12),
+                      _buildDeadlinesGrid(deadlines),
+                      const SizedBox(height: 24),
+                      _buildSectionHeader(
+                        "Active Projects",
+                        "See All",
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProjectsList(
+                                initialIndex: 1,
+                                organization: widget.organization,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _buildProjectsList(),
+>>>>>>> Stashed changes
                       const SizedBox(height: 100),
                     ]),
                   ),
@@ -121,6 +173,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                     color: const Color(0xFF111418),
                   ),
                 ),
+<<<<<<< Updated upstream
                 GestureDetector(
                   onTap: () {
                     Navigator.pushReplacement(
@@ -138,6 +191,37 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                         width: 24,
                         height: 24,
                         placeholderBuilder: (context) => const Icon(Icons.notifications_none),
+=======
+                Stack(
+                  children: [
+                    InkWell(
+                      onTap: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const MainDashboardScreen(),
+                          ),
+                        );
+                      },
+                      child: SvgPicture.asset(
+                        'assets/icons/bell.svg',
+                        width: 24,
+                        height: 24,
+                        placeholderBuilder: (context) =>
+                            const Icon(Icons.notifications_none),
+                      ),
+                    ),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+>>>>>>> Stashed changes
                       ),
                       Positioned(
                         right: 0,
@@ -203,6 +287,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
             ],
           ),
           const SizedBox(height: 8),
+<<<<<<< Updated upstream
           // TODO: Replace with actual balance data
           Text(
             "P45,280.00",
@@ -211,6 +296,25 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
               fontSize: 30,
               fontWeight: FontWeight.bold,
             ),
+=======
+          // TODO: [MVVM] bind balance from ViewModel instead of local FutureBuilder
+          FutureBuilder<double>(
+            future: _balanceFuture,
+            builder: (context, snapshot) {
+              final balance = snapshot.data ??
+                  (double.tryParse(widget.organization['budget']?.toString() ?? '') ??
+                      0);
+
+              return Text(
+                _formatCurrency(balance),
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                ),
+              );
+            },
+>>>>>>> Stashed changes
           ),
           const SizedBox(height: 20),
           ElevatedButton(
@@ -258,7 +362,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
     );
   }
 
-  Widget _buildSectionHeader(String title, String actionText) {
+  Widget _buildSectionHeader(String title, String actionText, {VoidCallback? onPressed}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -267,6 +371,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
           style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         TextButton(
+<<<<<<< Updated upstream
           onPressed: () {
             Navigator.push(
               context,
@@ -276,6 +381,11 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
             );
           },
           child: Text(actionText, style: const TextStyle(color: Color(0xFF137FEC))),
+=======
+          onPressed: onPressed ?? () {},
+          child: Text(actionText,
+              style: const TextStyle(color: Color(0xFF137FEC))),
+>>>>>>> Stashed changes
         ),
       ],
     );
@@ -320,6 +430,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
     );
   }
 
+  // TODO: [MVVM] move project list content into ViewModel and make this data-driven
   Widget _buildProjectsList() {
     return SizedBox(
       height: 180,
@@ -386,4 +497,63 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
       ),
     );
   }
+<<<<<<< Updated upstream
+=======
+
+  Widget _buildBottomNav() {
+    // TODO: [MVVM] move _selectedIndex and nav logic into ViewModel, e.g. OrganizationDashboardViewModel.currentTab
+    // Napoleon: Removed BottomNav from Org Selection and consolidated logic in Main Dashboard.
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.9),
+        border: const Border(top: BorderSide(color: Color(0xFFF3F4F6))),
+      ),
+      child: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) {
+          if (index == 1) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => ProjectsList(
+                      initialIndex: 1, organization: widget.organization)),
+            );
+          } else if (index == 2) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => FinancialLedgerScreen(
+                      initialIndex: 2, organization: widget.organization)),
+            );
+          } else {
+            setState(() {
+              _selectedIndex = index;
+            });
+          }
+          // TODO: Handle Profile navigation
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        selectedItemColor: const Color(0xFF137FEC),
+        unselectedItemColor: const Color(0xFF9CA3AF),
+        showUnselectedLabels: true,
+        selectedFontSize: 10,
+        unselectedFontSize: 10,
+        items: const [
+          BottomNavigationBarItem(
+              icon: Icon(Icons.grid_view_rounded), label: "Dashboard"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.assignment_outlined), label: "Projects"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              label: "Finances"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline), label: "Profile"),
+        ],
+      ),
+    );
+  }
+>>>>>>> Stashed changes
 }
