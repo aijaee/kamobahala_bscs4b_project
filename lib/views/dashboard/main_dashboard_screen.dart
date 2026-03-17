@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/services/organization_service.dart';
 import 'organization_dashboard.dart';
 import '../auth/login_screen.dart';
 import 'create_organization_screen.dart';
@@ -13,12 +15,9 @@ class MainDashboardScreen extends StatefulWidget {
 }
 
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
-<<<<<<< Updated upstream
 
   // TODO: Implement actual navigation logic and state management for bottom nav
   int currentIndex = 0;
-=======
-  // TODO: [MVVM] move service and state fields into MainDashboardViewModel
   // Napoleon: Removed BottomNav from Org Selection and consolidated logic in Main Dashboard.
   final AuthService _authService = AuthService();
   final OrganizationService _orgService = OrganizationService();
@@ -26,7 +25,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   String _fullName = "User";
   List<Map<String, dynamic>> _organizations = [];
   bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
@@ -35,7 +33,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
   // Napoleon: Implemented live backend integration.
   Future<void> _fetchData() async {
-    // TODO: [MVVM] move fetch logic into MainDashboardViewModel.fetchData()
     if (!mounted) return;
     setState(() {
       _isLoading = true;
@@ -55,25 +52,14 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       });
     }
   }
->>>>>>> Stashed changes
 
   @override
   Widget build(BuildContext context) {
-    // TODO: replace with logic that loads organizations for current user
-    bool hasOrganizations = true;
-    
-    final List<Map<String, String>> organizations = [
-      {'name': 'Acme Corp', 'role': 'Member'},
-      {'name': 'Beta Solutions', 'role': 'Admin'},
-      {'name': 'Gamma Initiatives', 'role': 'Member'},
-    ];
-
-    // TODO: fetch organization data from database/service
+    // Napoleon: Implemented live backend functionality.
+    bool hasOrganizations = _organizations.isNotEmpty;
 
     return Scaffold(
-
       backgroundColor: const Color(0xFFF6F7F8),
-
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: const Color.fromARGB(255, 11, 83, 155),
         onPressed: () {
@@ -90,37 +76,9 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           style: TextStyle(color: Colors.white),
         ),
       ),
-      
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex,
-        selectedItemColor: const Color(0xFF137FEC),
-        unselectedItemColor: Colors.grey,
-        onTap: (index) {
-          setState(() {
-            currentIndex = index;
-          });
-
-          // TODO: Navigate to pages 
-        },
-        items: const [
-
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            label: "Dashboard",
-          ),
-
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: "Profile",
-          ),
-        ],
-      ),
-
       body: SafeArea(
-
         child: Column(
           children: [
-
             /// HEADER
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
@@ -129,7 +87,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-<<<<<<< Updated upstream
                       Text(
                         // TODO : replace with actual user name
                         "Welcome back, User!",
@@ -137,8 +94,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
                         ),
-=======
-                      // TODO: [MVVM] use ViewModel.fullName and avoid direct future builder in view
                       FutureBuilder<Map<String, dynamic>?>(
                         future: _authService.getUserProfile(),
                         builder: (context, snapshot) {
@@ -155,11 +110,13 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                             ),
                           );
                         },
->>>>>>> Stashed changes
                       ),
                       IconButton(
                         icon: const Icon(Icons.logout),
-                        onPressed: () {
+                        onPressed: () async {
+                          // Napoleon: Implemented live backend integration.
+                          await _authService.signOut();
+                          if (!context.mounted) return;
                           Navigator.pushReplacement(
                             context,
                             MaterialPageRoute(
@@ -176,38 +133,32 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
             /// SCROLLABLE CONTENT
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-
-                child: Column(
+                child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
                     /// ORGANIZATIONS
-<<<<<<< Updated upstream
-                    if (!hasOrganizations) 
-=======
                     // TODO: [MVVM] bind UI to ViewModel.isLoading and ViewModel.organizations
                     if (_isLoading)
                       const Center(child: CircularProgressIndicator())
                     else if (!hasOrganizations)
->>>>>>> Stashed changes
+                    if (_isLoading)
+                      const Center(child: CircularProgressIndicator())
+                    else if (!hasOrganizations)
                       _buildOrgEmptyState()
                     else
-                      _buildOrganizationList(organizations),
+                      _buildOrganizationList(_organizations),
                     const SizedBox(height: 24),
-
-                  ]  
-                ),
-              )
-            )
+                  ]),
+            ))
           ],
         ),
       ),
     );
   }
 
-  Widget _buildOrganizationList(List<Map<String, String>> orgs) {
+  Widget _buildOrganizationList(List<Map<String, dynamic>> orgs) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -223,18 +174,18 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           separatorBuilder: (context, index) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final org = orgs[index];
-            return _buildOrganizationCard(org['name']!, org['role']!, context);
+            // Napoleon: Implemented live backend functionality.
+            return _buildOrganizationCard(org, context);
           },
         ),
       ],
     );
   }
 
-  Widget _buildOrganizationCard(String name, String role, BuildContext context) {
-  return Material(
-    elevation: 2,
-    borderRadius: BorderRadius.circular(12),
-    child: InkWell(
+  Widget _buildOrganizationCard(
+      Map<String, dynamic> org, BuildContext context) {
+    return Material(
+      elevation: 2,
       borderRadius: BorderRadius.circular(12),
       onTap: () {
         // navigate to organization's dashboard
@@ -243,7 +194,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           MaterialPageRoute(
             builder: (_) => const OrganizationDashboard(),
           ),
-<<<<<<< Updated upstream
         );
       },
       child: Container(
@@ -256,7 +206,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
             colors: [
               Color(0xFF137FEC),
               Color.fromARGB(255, 33, 70, 113),
-=======
           child: Row(
             children: [
               Container(
@@ -372,115 +321,138 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                   return items;
                 },
               ),
->>>>>>> Stashed changes
             ],
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          // navigate to organization's dashboard
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OrganizationDashboard(organization: org),
+            ),
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 35, horizontal: 20),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF137FEC),
+                Color.fromARGB(255, 33, 70, 113),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(12),
           ),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 255, 255, 255).withOpacity(.1),
-                shape: BoxShape.circle,
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color:
+                      const Color.fromARGB(255, 255, 255, 255).withOpacity(.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.business,
+                  color: Color.fromARGB(255, 236, 236, 236),
+                ),
               ),
-              child: const Icon(
-                Icons.business,
-                color: Color.fromARGB(255, 236, 236, 236),
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: GoogleFonts.inter(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: const Color.fromARGB(255, 243, 243, 243),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    role,
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: const Color.fromARGB(255, 222, 222, 222),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            PopupMenuButton<String>(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 6,
-              icon: const Icon(
-                Icons.more_vert,
-                color: Color.fromARGB(255, 208, 208, 208),
-              ),
-              onSelected: (value) {
-                if (value == 'leave') {
-                  // TODO: leave organization
-                }
-
-                if (value == 'edit') {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const EditOrganizationScreen(),
-                    ),
-                  );
-                }
-              },
-              itemBuilder: (context) {
-                List<PopupMenuEntry<String>> items = [];
-
-                // Only admins can edit
-                if (role.toLowerCase() == "admin") {
-                  items.add(
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Row(
-                        children: [
-                          Icon(Icons.edit, size: 18),
-                          SizedBox(width: 10),
-                          Text("Edit Organization"),
-                        ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      org['name'] ?? 'Unnamed',
+                      style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: const Color.fromARGB(255, 243, 243, 243),
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      // BACKEND PLACEHOLDER: Role is hardcoded as all orgs are user-owned for now
+                      'Admin',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: const Color.fromARGB(255, 222, 222, 222),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 6,
+                icon: const Icon(
+                  Icons.more_vert,
+                  color: Color.fromARGB(255, 208, 208, 208),
+                ),
+                onSelected: (value) {
+                  if (value == 'leave') {
+                    // TODO: leave organization
+                  }
+
+                  if (value == 'edit') {
+                    // Napoleon: Implemented live backend functionality.
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            EditOrganizationScreen(organization: org),
+                      ),
+                    );
+                  }
+                },
+                itemBuilder: (context) {
+                  List<PopupMenuEntry<String>> items = [];
+
+                  // Only admins can edit
+                  // BACKEND PLACEHOLDER: Role is hardcoded as all orgs are user-owned for now
+                  if ('admin' == "admin") {
+                    items.add(
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, size: 18),
+                            SizedBox(width: 10),
+                            Text("Edit Organization"),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  items.add(
+                    const PopupMenuItem(
+                        value: 'leave',
+                        child: Row(
+                          children: [
+                            Icon(Icons.logout, size: 18),
+                            SizedBox(width: 10),
+                            Text("Leave Organization"),
+                          ],
+                        )),
                   );
-                }
 
-                items.add(
-                  const PopupMenuItem(
-                    value: 'leave',
-                    child: Row(
-                        children: [
-                          Icon(Icons.logout, size: 18),
-                          SizedBox(width: 10),
-                          Text("Leave Organization"),
-                        ],
-                    )
-                  ),
-                );
-
-                return items;
-              },
-            ),
-          ],
+                  return items;
+                },
+              ),
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildOrgEmptyState() {
     return Center(
@@ -488,11 +460,15 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         padding: const EdgeInsets.symmetric(vertical: 60),
         child: Column(
           children: [
-            Icon(Icons.domain_disabled, size: 80, color: Colors.grey.withOpacity(.3)),
+            Icon(Icons.domain_disabled,
+                size: 80, color: Colors.grey.withOpacity(.3)),
             const SizedBox(height: 16),
             const Text(
               "No Organizations Joined",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey),
             ),
             const SizedBox(height: 8),
             const Text(

@@ -1,17 +1,26 @@
-# kamobahala_bscs4b_project
+# Bahala - Finance & Project Management App
 
-A new Flutter project.
+A Flutter application for managing financial transactions and projects with secure authentication and real-time data synchronization.
 
-## Getting Started
+## About
 
-This project is a starting point for a Flutter application.
+Bahala allows users to track income and expenses, manage projects, monitor budgets, and maintain organizational financial records through an intuitive dashboard interface.
 
-A few resources to get you started if this is your first Flutter project:
+## Made By
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+**IRAD JOSEPH S. ARANTE**  
+**FRANCO ANGELO B. BESA**  
+**LYNCOLIN G. DELIGERO**  
+**NAPOLEON III T. CORTEZ**
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+**Course & Section:** BSCS 4B  
+**Subject:** Emerging Trends + Mobile Development Project
+
+## 📝 License
+
+This project is private and not licensed for distribution.
+
+---
+
+**Version**: 1.0.0  
+**Last Updated**: 2026

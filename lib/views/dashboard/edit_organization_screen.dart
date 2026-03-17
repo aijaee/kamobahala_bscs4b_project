@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'main_dashboard_screen.dart';
+import '../../core/services/organization_service.dart';
 
 const kPrimary = Color(0xFF1A73E8);
 const kPrimaryDark = Color(0xFF0B539B);
@@ -12,7 +13,9 @@ const kTextSecondary = Color(0xFF6B7280);
 const kRed = Color(0xFFE53935);
 
 class EditOrganizationScreen extends StatefulWidget {
-  const EditOrganizationScreen({super.key});
+  // Napoleon: Implemented live backend functionality.
+  final Map<String, dynamic> organization;
+  const EditOrganizationScreen({super.key, required this.organization});
 
   @override
   State<EditOrganizationScreen> createState() => _EditOrganizationScreenState();
@@ -21,6 +24,7 @@ class EditOrganizationScreen extends StatefulWidget {
 class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
   // TODO: [MVVM] move organization state and service calls into EditOrganizationViewModel
   final _formKey = GlobalKey<FormState>();
+  final OrganizationService _orgService = OrganizationService();
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
@@ -32,16 +36,13 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
   @override
   void initState() {
     super.initState();
-<<<<<<< Updated upstream
-    // TODO: load organization details
-=======
     // TODO: [MVVM] initialize ViewModel with widget.organization and remove text controller preset logic from view
     // Napoleon: Implemented live backend functionality.
     // Load organization details from the passed widget data
     nameController.text = widget.organization['name'] ?? '';
     descriptionController.text = widget.organization['description'] ?? '';
     budgetController.text = (widget.organization['budget'] ?? 0.0).toString();
->>>>>>> Stashed changes
+
   }
 
   InputDecoration _inputDecoration(String hint) {
@@ -165,15 +166,14 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
           Expanded(
             flex: 2,
             child: DropdownButtonFormField<String>(
-              
-              value: members[index]["role"],
+              initialValue: members[index]["role"],
               style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
               dropdownColor: kCardBg,
               decoration: InputDecoration(
                 filled: true,
                 fillColor: kCardBg,
-                
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: const BorderSide(color: kBorder),
@@ -194,7 +194,6 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
               onChanged: (value) {
                 setState(() => members[index]["role"] = value);
               },
-              
             ),
           ),
           const SizedBox(width: 4),
@@ -257,7 +256,6 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                     return null;
                   },
                 ),
-
                 const SizedBox(height: 18),
                 _label("Description (Optional)"),
                 TextFormField(
@@ -267,12 +265,12 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                   decoration: _inputDecoration(
                       "Outline organization goals and purpose..."),
                 ),
-
                 const SizedBox(height: 18),
                 _buildBudgetCard(),
                 const SizedBox(height: 24),
                 _label("Members"),
-                ...List.generate(members.length, (index) => _buildMemberRow(index)),
+                ...List.generate(
+                    members.length, (index) => _buildMemberRow(index)),
                 const SizedBox(height: 10),
                 // TODO: [MVVM] delegate member addition to ViewModel.addMember()
                 TextButton.icon(
@@ -288,9 +286,12 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                   label: Text(
                     "Add Member",
                     style: GoogleFonts.inter(
-                        fontSize: 14, color: kPrimary, fontWeight: FontWeight.w500),
+                        fontSize: 14,
+                        color: kPrimary,
+                        fontWeight: FontWeight.w500),
                   ),
-                  style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 4)),
+                  style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 4)),
                 ),
                 const SizedBox(height: 32),
                 Row(
@@ -307,13 +308,11 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
                         onPressed: () {
-<<<<<<< Updated upstream
-=======
                           // TODO: [MVVM] call ViewModel.updateOrganization() instead of direct method
                           // Napoleon: Implemented live backend functionality.
->>>>>>> Stashed changes
+                          // Napoleon: Implemented live backend functionality.
                           if (_formKey.currentState!.validate()) {
-                            // TODO: update organization
+                            _updateOrganization();
                           }
                         },
                         child: Text(
@@ -334,11 +333,9 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
       ),
     );
   }
-<<<<<<< Updated upstream
-}
-=======
 
   // TODO: [MVVM] move update logic to ViewModel and convert to async state updates
+
   // Napoleon: Implemented live backend functionality.
   void _updateOrganization() async {
     // Show loading indicator
@@ -365,4 +362,4 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
     }
   }
 }
->>>>>>> Stashed changes
+
