@@ -15,6 +15,9 @@ class MainDashboardScreen extends StatefulWidget {
 }
 
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
+
+  // TODO: Implement actual navigation logic and state management for bottom nav
+  int currentIndex = 0;
   // Napoleon: Removed BottomNav from Org Selection and consolidated logic in Main Dashboard.
   final AuthService _authService = AuthService();
   final OrganizationService _orgService = OrganizationService();
@@ -22,7 +25,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   String _fullName = "User";
   List<Map<String, dynamic>> _organizations = [];
   bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
@@ -85,6 +87,13 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      Text(
+                        // TODO : replace with actual user name
+                        "Welcome back, User!",
+                        style: GoogleFonts.inter(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
                       FutureBuilder<Map<String, dynamic>?>(
                         future: _authService.getUserProfile(),
                         builder: (context, snapshot) {
@@ -130,6 +139,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     /// ORGANIZATIONS
+                    // TODO: [MVVM] bind UI to ViewModel.isLoading and ViewModel.organizations
+                    if (_isLoading)
+                      const Center(child: CircularProgressIndicator())
+                    else if (!hasOrganizations)
                     if (_isLoading)
                       const Center(child: CircularProgressIndicator())
                     else if (!hasOrganizations)
@@ -174,6 +187,141 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     return Material(
       elevation: 2,
       borderRadius: BorderRadius.circular(12),
+      onTap: () {
+        // navigate to organization's dashboard
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const OrganizationDashboard(),
+          ),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 35, horizontal: 20),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF137FEC),
+              Color.fromARGB(255, 33, 70, 113),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color:
+                      const Color.fromARGB(255, 255, 255, 255).withOpacity(.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.business,
+                  color: Color.fromARGB(255, 236, 236, 236),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      org['name'] ?? 'Unnamed',
+                      style: GoogleFonts.inter(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: const Color.fromARGB(255, 243, 243, 243),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      // BACKEND PLACEHOLDER: Role is hardcoded as all orgs are user-owned for now
+                      'Admin',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: const Color.fromARGB(255, 222, 222, 222),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuButton<String>(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 6,
+                icon: const Icon(
+                  Icons.more_vert,
+                  color: Color.fromARGB(255, 208, 208, 208),
+                ),
+                onSelected: (value) {
+                  if (value == 'leave') {
+                    // TODO: leave organization
+                  }
+
+                  if (value == 'delete') {
+                    // TODO: delete organization
+                  }
+
+                  if (value == 'edit') {
+                    // Napoleon: Implemented live backend functionality.
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            EditOrganizationScreen(organization: org),
+                      ),
+                    );
+                  }
+                },
+                itemBuilder: (context) {
+                  List<PopupMenuEntry<String>> items = [];
+
+                  // Only admins can edit
+                  // TODO: BACKEND PLACEHOLDER: Role is hardcoded as all orgs are user-owned for now
+                  if ('admin' == "admin") {
+                    items.add(
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, size: 18),
+                            SizedBox(width: 10),
+                            Text("Edit Organization"),
+                          ],
+                        ),
+                      ),
+                    );
+                    items.add(
+                    const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.logout, size: 18),
+                            SizedBox(width: 10),
+                            Text("Delete Organization"),
+                          ],
+                        )),
+                  );
+                  }
+
+                  items.add(
+                    const PopupMenuItem(
+                        value: 'leave',
+                        child: Row(
+                          children: [
+                            Icon(Icons.logout, size: 18),
+                            SizedBox(width: 10),
+                            Text("Leave Organization"),
+                          ],
+                        )),
+                  );
+
+                  return items;
+                },
+              ),
+            ],
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () {

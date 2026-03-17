@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class FinancialService {
   final SupabaseClient _client = Supabase.instance.client;
 
+  // TODO: [MVVM] move transaction fetch and calc logic to FinancialViewModel / OrganizationDashboardViewModel (service remains thin)
   Future<List<Map<String, dynamic>>> fetchTransactions(String organizationId) async {
     final response = await _client
         .from('financial_transactions')

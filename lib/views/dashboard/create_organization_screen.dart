@@ -23,6 +23,7 @@ class CreateOrganizationScreen extends StatefulWidget {
 }
 
 class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
+  // TODO: [MVVM] move state and service into CreateOrganizationViewModel
   final _formKey = GlobalKey<FormState>();
   final OrganizationService _organizationService = OrganizationService();
 
@@ -30,6 +31,7 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController budgetController = TextEditingController();
 
+  // TODO: [MVVM] build member list state in ViewModel; avoid TextEditingController in widget state if possible
   List<Map<String, dynamic>> members = [
     {"controller": TextEditingController(), "role": "Member"}
   ];
@@ -100,6 +102,7 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // TODO: [MVVM] convert this to use ChangeNotifierProvider<CreateOrganizationViewModel>
     return Scaffold(
       backgroundColor: kSurface,
 
@@ -182,6 +185,7 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
                 const SizedBox(height: 10),
 
                 // ── Add Member Button ────────────────────────────────────────
+                // TODO: [MVVM] wire this to ViewModel.addMember() for member list logic
                 TextButton.icon(
                   onPressed: () {
                     setState(() {
@@ -221,6 +225,7 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 15),
                     ),
                     onPressed: () {
+                      // TODO: [MVVM] call ViewModel.createOrganization() and drive navigation/snackbar from state
                       if (_formKey.currentState!.validate()) {
                         _createOrganization();
                       }
@@ -401,6 +406,7 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
       builder: (_) => const Center(child: CircularProgressIndicator()),
     );
 
+    // TODO: [MVVM] move service error handling and response logic into ViewModel
     try {
       await _organizationService.createOrganization(data);
 
@@ -427,3 +433,4 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
     }
   }
 }
+

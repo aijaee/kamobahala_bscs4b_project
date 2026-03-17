@@ -4,6 +4,10 @@ import 'package:google_fonts/google_fonts.dart';
 import '../dashboard/organization_dashboard.dart';
 import '../../core/services/financial_service.dart';
 import '../../core/services/project_service.dart';
+import 'new_proj_screen.dart';
+import '../dashboard/financial_ledger.dart';
+import '../../core/services/financial_service.dart';
+import '../../core/services/project_service.dart';
 
 import '../dashboard/financial_ledger.dart';
 
@@ -18,6 +22,8 @@ class ProjectsList extends StatefulWidget {
 }
 
 class _ProjectsListState extends State<ProjectsList> {
+  // TODO: [MVVM] move these into ViewModel: currentIndex, selectedTab, projects, completedProjects, isLoading, balance, searchQuery
+  late int currentIndex;
   late int currentIndex;
   int selectedTab = 0;
   final ProjectService _projectService = ProjectService();
@@ -38,12 +44,16 @@ class _ProjectsListState extends State<ProjectsList> {
   @override
   void initState() {
     super.initState();
+    // TODO: [MVVM] move this to ViewModel initialization and remove direct service calls
+  void initState() {
+    super.initState();
     currentIndex = widget.initialIndex;
     _fetchProjects();
     _fetchCompletedProjects();
     _fetchBalance();
   }
 
+  // TODO: [MVVM] implement fetchProjects() in ViewModel and call from init
   Future<void> _fetchProjects() async {
     final projects = await _projectService
         .fetchProjects(widget.organization['id'].toString());
@@ -55,6 +65,7 @@ class _ProjectsListState extends State<ProjectsList> {
     }
   }
 
+  // TODO: [MVVM] replace with ViewModel.fetchBalance() and observe via Provider
   Future<void> _fetchBalance() async {
     try {
       final transactions = await _financialService
@@ -112,9 +123,47 @@ class _ProjectsListState extends State<ProjectsList> {
   }
 
   @override
+
+  Widget build(BuildContext context) {
+
+  Future<void> _fetchCompletedProjects() async {
+    try {
+      final projects = await _projectService
+          .fetchProjects(widget.organization['id'].toString());
+      final completed = projects.where((p) => p['status'] == 'completed').toList();
+      
+      if (mounted) {
+        setState(() {
+          _completedProjects = completed;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching completed projects: $e');
+    }
+  }
+
+  List<Map<String, dynamic>> _getFilteredProjects() {
+    return _projects.where((project) {
+      // Filter by search query
+      final matchesSearch = _searchQuery.isEmpty ||
+          project['name']
+              .toString()
+              .toLowerCase()
+              .contains(_searchQuery.toLowerCase());
+
+      // Filter by selected tab
+      final matchesTab = selectedTab == 0 ||
+          project['department'] == tabs[selectedTab];
+
+      return matchesSearch && matchesTab;
+    }).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F8),
+
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF137FEC),
         onPressed: () {
@@ -188,6 +237,32 @@ class _ProjectsListState extends State<ProjectsList> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
                 children: [
+                  _buildFinancialCard(),
+                  const SizedBox(height: 20),
+                  // TODO: add if condition to allow user to delete a project if they are an admin
+                  _sectionHeader("Ongoing Projects", ""),
+                  const SizedBox(height: 12),
+                  // Dynamic data fetching with search and tab filtering
+                  // TODO: [MVVM] remove direct loading condition and use ViewModel.isLoading instead
+                  if (_isLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else
+                    ..._getFilteredProjects().isEmpty
+                        ? [
+                            const Center(
+                                child: Padding(
+                              padding: EdgeInsets.all(20.0),
+                              child: Text("No projects found."),
+                            ))
+                          ]
+                        : _getFilteredProjects()
+                            .map((project) {
+                            // Calculate placeholder progress/spent since schema might not have it yet
+                            double progress = 0.0;
+                            // Ensure budget is parsed safely
+                            String budget = project['budget'] != null
+                                ? "₱${project['budget']}"
+                                : "₱0";
                   _buildFinancialCard(),
                   const SizedBox(height: 20),
                   _sectionHeader("Ongoing Projects", ""),
@@ -293,6 +368,11 @@ class _ProjectsListState extends State<ProjectsList> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+
+                  IconButton(
+                    onPressed:(){},
+                    icon: const Icon(Icons.add_circle_outline)
+                  )
                   IconButton(
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -309,6 +389,8 @@ class _ProjectsListState extends State<ProjectsList> {
               const SizedBox(height: 8),
 
               TextField(
+                // TODO: Implement search functionality
+                // TODO: [MVVM] bind search input to ViewModel.searchQuery
                 onChanged: (value) {
                   setState(() {
                     _searchQuery = value;

@@ -15,6 +15,29 @@ class OrganizationDashboard extends StatefulWidget {
 }
 
 class _OrganizationDashboardState extends State<OrganizationDashboard> {
+  // track bottom nav selection
+  int currentIndex = 0;
+  // TODO: [MVVM] move UI state (selectedIndex, balance fetch) into OrganizationDashboardViewModel
+  int _selectedIndex = 0;
+  final FinancialService _financialService = FinancialService();
+  late Future<double> _balanceFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _balanceFuture = _loadBalance();
+  }
+
+  // TODO: [MVVM] replace with ViewModel.loadBalance() and observe via Provider/Consumer
+  Future<double> _loadBalance() async {
+    try {
+      final transactions = await _financialService
+          .fetchTransactions(widget.organization['id'].toString());
+      return _financialService.calculateBalance(widget.organization, transactions);
+    } catch (_) {
+      return double.tryParse(widget.organization['budget']?.toString() ?? '') ?? 0;
+    }
+  }
   int _selectedIndex = 0;
   final FinancialService _financialService = FinancialService();
   late Future<double> _balanceFuture;
@@ -62,6 +85,24 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                       const SizedBox(height: 12),
                       _buildDeadlinesGrid(deadlines),
                       const SizedBox(height: 24),
+
+                      _buildSectionHeader(
+                        "Active Projects",
+                        "See All",
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProjectsList(
+                                initialIndex: 1,
+                                organization: widget.organization,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _buildProjectsList(),
                       _buildSectionHeader("Active Projects", "See All"),
                       const SizedBox(height: 12),
                       _buildProjectsList(),
@@ -147,6 +188,15 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
             ],
           ),
           const SizedBox(height: 8),
+          // TODO: Replace with actual balance data
+          Text(
+            "P45,280.00",
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 30,
+              fontWeight: FontWeight.bold,
+            ),
+          // TODO: [MVVM] bind balance from ViewModel instead of local FutureBuilder
           FutureBuilder<double>(
             future: _balanceFuture,
             builder: (context, snapshot) {
@@ -187,7 +237,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
     return '${amount < 0 ? '-₱' : '₱'}${buffer.toString()}.$decimals';
   }
 
-  Widget _buildSectionHeader(String title, String actionText) {
+  Widget _buildSectionHeader(String title, String actionText, {VoidCallback? onPressed}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -229,6 +279,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
     );
   }
 
+  // TODO: [MVVM] move project list content into ViewModel and make this data-driven
   Widget _buildProjectsList() {
     return SizedBox(
       height: 180,
@@ -283,6 +334,10 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
   }
 
   Widget _buildBottomNav() {
+    // TODO: [MVVM] move _selectedIndex and nav logic into ViewModel, e.g. OrganizationDashboardViewModel.currentTab
+
+  Widget _buildBottomNav() {
+    // Napoleon: Removed BottomNav from Org Selection and consolidated logic in Main Dashboard.
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
       decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
