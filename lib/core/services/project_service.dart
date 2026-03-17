@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class ProjectService {
   final SupabaseClient _client = Supabase.instance.client;
 
+  // TODO: [MVVM] this should be invoked by ProjectsViewModel and data injected into UI by Provider
   // Fetches projects for an organization
   Future<List<Map<String, dynamic>>> fetchProjects(String orgId) async {
     final response =

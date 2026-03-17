@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class OrganizationService {
   final SupabaseClient _client = Supabase.instance.client;
 
+  // TODO: [MVVM] this should be called via OrganizationViewModel for UI data binding
   // Fetches all organizations available to the user
   Future<List<Map<String, dynamic>>> getOrganizations() async {
     return await _client.from('organizations').select();

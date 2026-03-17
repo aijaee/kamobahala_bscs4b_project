@@ -15,6 +15,7 @@ class FinancialLedgerScreen extends StatefulWidget {
 }
 
 class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
+  // TODO: [MVVM] move these into ViewModel: currentIndex, filters, transactions, isLoading, selectedFilterIndex
   late int currentIndex;
   final FinancialService _financialService = FinancialService();
   final List<String> _filters = ['All', 'Income', 'Expenses'];
@@ -29,6 +30,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     _fetchTransactions();
   }
 
+  // TODO: [MVVM] move transaction fetching to ViewModel.fetchTransactions() and notify listeners
   Future<void> _fetchTransactions() async {
     try {
       final transactions = await _financialService
@@ -52,6 +54,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // TODO: [MVVM] use ViewModel.filteredTransactions / groupedTransactions state instead of local helper methods
     final filteredTransactions = _filteredTransactions();
     final groupedTransactions = _groupTransactions(filteredTransactions);
 
@@ -82,6 +85,8 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
                 ),
             ],
           ),
+          // TODO: [MVVM] this should trigger a ViewModel action to update the state and open a transaction form screen/modal
+          // TODO: add if condition that only shows button if user is admin
           _buildFloatingActionButton(),
         ],
       ),
@@ -162,6 +167,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     );
   }
 
+  // TODO: [MVVM] bind balance to ViewModel.balance and remove local service calc
   Widget _buildBalanceCard() {
     final balance = _financialService.calculateBalance(
       widget.organization,
@@ -208,6 +214,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     );
   }
 
+  // TODO: [MVVM] move filter UI state to ViewModel.updateFilter(index) and use model filter list
   Widget _buildFilterTabs() {
     return Container(
       color: Colors.white,

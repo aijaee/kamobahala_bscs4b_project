@@ -22,6 +22,7 @@ class EditOrganizationScreen extends StatefulWidget {
 }
 
 class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
+  // TODO: [MVVM] move organization state and service calls into EditOrganizationViewModel
   final _formKey = GlobalKey<FormState>();
   final OrganizationService _orgService = OrganizationService();
 
@@ -29,16 +30,19 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController budgetController = TextEditingController();
 
+  // TODO: [MVVM] manage members list in ViewModel instead of widget state when possible
   List<Map<String, dynamic>> members = [];
 
   @override
   void initState() {
     super.initState();
+    // TODO: [MVVM] initialize ViewModel with widget.organization and remove text controller preset logic from view
     // Napoleon: Implemented live backend functionality.
     // Load organization details from the passed widget data
     nameController.text = widget.organization['name'] ?? '';
     descriptionController.text = widget.organization['description'] ?? '';
     budgetController.text = (widget.organization['budget'] ?? 0.0).toString();
+
   }
 
   InputDecoration _inputDecoration(String hint) {
@@ -268,6 +272,7 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                 ...List.generate(
                     members.length, (index) => _buildMemberRow(index)),
                 const SizedBox(height: 10),
+                // TODO: [MVVM] delegate member addition to ViewModel.addMember()
                 TextButton.icon(
                   onPressed: () {
                     setState(() {
@@ -303,6 +308,8 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
                         onPressed: () {
+                          // TODO: [MVVM] call ViewModel.updateOrganization() instead of direct method
+                          // Napoleon: Implemented live backend functionality.
                           // Napoleon: Implemented live backend functionality.
                           if (_formKey.currentState!.validate()) {
                             _updateOrganization();
@@ -326,6 +333,8 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
       ),
     );
   }
+
+  // TODO: [MVVM] move update logic to ViewModel and convert to async state updates
 
   // Napoleon: Implemented live backend functionality.
   void _updateOrganization() async {
@@ -353,3 +362,4 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
     }
   }
 }
+

@@ -14,6 +14,29 @@ class OrganizationDashboard extends StatefulWidget {
 }
 
 class _OrganizationDashboardState extends State<OrganizationDashboard> {
+  // track bottom nav selection
+  int currentIndex = 0;
+  // TODO: [MVVM] move UI state (selectedIndex, balance fetch) into OrganizationDashboardViewModel
+  int _selectedIndex = 0;
+  final FinancialService _financialService = FinancialService();
+  late Future<double> _balanceFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _balanceFuture = _loadBalance();
+  }
+
+  // TODO: [MVVM] replace with ViewModel.loadBalance() and observe via Provider/Consumer
+  Future<double> _loadBalance() async {
+    try {
+      final transactions = await _financialService
+          .fetchTransactions(widget.organization['id'].toString());
+      return _financialService.calculateBalance(widget.organization, transactions);
+    } catch (_) {
+      return double.tryParse(widget.organization['budget']?.toString() ?? '') ?? 0;
+    }
+  }
   int _selectedIndex = 0;
   final FinancialService _financialService = FinancialService();
   late Future<double> _balanceFuture;
@@ -75,6 +98,23 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                   padding: const EdgeInsets.all(16.0),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
+                      _buildFinancialCard(),
+                      const SizedBox(height: 24),
+                      if (isDashboardEmpty)
+                        _buildEmptyState()
+                      else ...[
+                        _buildSectionHeader("Priority Deadlines", ""),
+                        const SizedBox(height: 12),
+                        _buildDeadlinesGrid(deadlines),
+                        const SizedBox(height: 24),
+                        _buildSectionHeader("Active Projects", "See All"),
+                        const SizedBox(height: 12),
+                        _buildProjectsList(),
+                      ],
+                      // TODO: [MVVM] use ViewModel.balance and avoid FutureBuilder in view
+                      _buildFinancialCard(
+                          context), // Pass context for navigation
+                      const SizedBox(height: 24),
                       _buildFinancialCard(
                           context), // Pass context for navigation
                       const SizedBox(height: 24),
@@ -82,6 +122,24 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                       const SizedBox(height: 12),
                       _buildDeadlinesGrid(deadlines),
                       const SizedBox(height: 24),
+
+                      _buildSectionHeader(
+                        "Active Projects",
+                        "See All",
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProjectsList(
+                                initialIndex: 1,
+                                organization: widget.organization,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _buildProjectsList(),
                       _buildSectionHeader("Active Projects", "See All"),
                       const SizedBox(height: 12),
                       _buildProjectsList(),
@@ -121,14 +179,23 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                     color: const Color(0xFF111418),
                   ),
                 ),
-                Stack(
-                  children: [
-                    SvgPicture.asset(
-                      'assets/icons/bell.svg',
-                      width: 24,
-                      height: 24,
-                      placeholderBuilder: (context) =>
-                          const Icon(Icons.notifications_none),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const MainDashboardScreen(),
+                              ),
+                            );
+                  },
+                  child: Stack(
+                    children: [
+                      // TODO: implement notifications (low priority) and show red dot only when there are unread notifications
+                      SvgPicture.asset(
+                        'assets/icons/bell.svg',
+                        width: 24,
+                        height: 24,
+                        placeholderBuilder: (context) => const Icon(Icons.notifications_none),
                     ),
                     Positioned(
                       right: 0,
@@ -139,6 +206,18 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                         decoration: const BoxDecoration(
                           color: Colors.red,
                           shape: BoxShape.circle,
+                        ),
+                      ),
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
                         ),
                       ),
                     )
@@ -201,6 +280,15 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
             ],
           ),
           const SizedBox(height: 8),
+          // TODO: Replace with actual balance data
+          Text(
+            "P45,280.00",
+            style: GoogleFonts.inter(
+              color: Colors.white,
+              fontSize: 30,
+              fontWeight: FontWeight.bold,
+            ),
+          // TODO: [MVVM] bind balance from ViewModel instead of local FutureBuilder
           FutureBuilder<double>(
             future: _balanceFuture,
             builder: (context, snapshot) {
@@ -264,7 +352,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
     return '$prefix${buffer.toString()}.$decimals';
   }
 
-  Widget _buildSectionHeader(String title, String actionText) {
+  Widget _buildSectionHeader(String title, String actionText, {VoidCallback? onPressed}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -273,6 +361,18 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
           style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         TextButton(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ProjectsList(),
+              ),
+            );
+          },
+          child: Text(actionText, style: const TextStyle(color: Color(0xFF137FEC))),
+          onPressed: onPressed ?? () {},
+          child: Text(actionText,
+              style: const TextStyle(color: Color(0xFF137FEC))),
           onPressed: () {},
           child: Text(actionText,
               style: const TextStyle(color: Color(0xFF137FEC))),
@@ -326,6 +426,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
     );
   }
 
+  // TODO: [MVVM] move project list content into ViewModel and make this data-driven
   Widget _buildProjectsList() {
     return SizedBox(
       height: 180,
@@ -387,6 +488,9 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
       ),
     );
   }
+
+  Widget _buildBottomNav() {
+    // TODO: [MVVM] move _selectedIndex and nav logic into ViewModel, e.g. OrganizationDashboardViewModel.currentTab
 
   Widget _buildBottomNav() {
     // Napoleon: Removed BottomNav from Org Selection and consolidated logic in Main Dashboard.
