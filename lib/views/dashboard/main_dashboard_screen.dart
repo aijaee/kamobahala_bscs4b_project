@@ -15,21 +15,21 @@ class MainDashboardScreen extends StatefulWidget {
 }
 
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
-  // Napoleon: Removed BottomNav from Org Selection and consolidated logic in Main Dashboard.
+
+  // TODO: Implement actual navigation logic and state management for bottom nav
+  int currentIndex = 0;
   final AuthService _authService = AuthService();
   final OrganizationService _orgService = OrganizationService();
 
   String _fullName = "User";
   List<Map<String, dynamic>> _organizations = [];
   bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
     _fetchData();
   }
 
-  // Napoleon: Implemented live backend integration.
   Future<void> _fetchData() async {
     if (!mounted) return;
     setState(() {
@@ -53,7 +53,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Napoleon: Implemented live backend functionality.
     bool hasOrganizations = _organizations.isNotEmpty;
 
     return Scaffold(
@@ -77,7 +76,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            /// HEADER
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
               child: Column(
@@ -88,7 +86,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                       FutureBuilder<Map<String, dynamic>?>(
                         future: _authService.getUserProfile(),
                         builder: (context, snapshot) {
-                          // Napoleon: Fixed atomic registration and database sync.
                           final displayName = snapshot.data?['full_name'] ??
                               _authService
                                   .currentUser?.userMetadata?['full_name'] ??
@@ -105,7 +102,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                       IconButton(
                         icon: const Icon(Icons.logout),
                         onPressed: () async {
-                          // Napoleon: Implemented live backend integration.
                           await _authService.signOut();
                           if (!context.mounted) return;
                           Navigator.pushReplacement(
@@ -122,14 +118,13 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
               ),
             ),
 
-            /// SCROLLABLE CONTENT
             Expanded(
                 child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    /// ORGANIZATIONS
+                    // TODO: [MVVM] bind UI to ViewModel.isLoading and ViewModel.organizations
                     if (_isLoading)
                       const Center(child: CircularProgressIndicator())
                     else if (!hasOrganizations)
@@ -161,7 +156,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           separatorBuilder: (context, index) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final org = orgs[index];
-            // Napoleon: Implemented live backend functionality.
             return _buildOrganizationCard(org, context);
           },
         ),
@@ -175,9 +169,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
       elevation: 2,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: () {
-          // navigate to organization's dashboard
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -229,7 +221,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      // BACKEND PLACEHOLDER: Role is hardcoded as all orgs are user-owned for now
                       'Admin',
                       style: GoogleFonts.inter(
                         fontSize: 12,
@@ -253,8 +244,11 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                     // TODO: leave organization
                   }
 
+                  if (value == 'delete') {
+                    // TODO: delete organization
+                  }
+
                   if (value == 'edit') {
-                    // Napoleon: Implemented live backend functionality.
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -267,8 +261,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 itemBuilder: (context) {
                   List<PopupMenuEntry<String>> items = [];
 
-                  // Only admins can edit
-                  // BACKEND PLACEHOLDER: Role is hardcoded as all orgs are user-owned for now
+                  // TODO: BACKEND PLACEHOLDER: Role is hardcoded as all orgs are user-owned for now
                   if ('admin' == "admin") {
                     items.add(
                       const PopupMenuItem(
@@ -282,6 +275,17 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                         ),
                       ),
                     );
+                    items.add(
+                    const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.logout, size: 18),
+                            SizedBox(width: 10),
+                            Text("Delete Organization"),
+                          ],
+                        )),
+                  );
                   }
 
                   items.add(
