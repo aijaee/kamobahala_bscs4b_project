@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import '../../core/services/financial_service.dart';
+import 'package:provider/provider.dart';
+import '../../viewmodels/financial_viewmodel.dart';
+import '../../viewmodels/organization_dashboard_viewmodel.dart';
+import '../../viewmodels/projects_viewmodel.dart';
 import 'financial_ledger.dart';
 import '../projects/projects_list.dart';
-import '../projects/project_overview.dart'; // Added this import
+import '../projects/project_overview.dart';
 
 class OrganizationDashboard extends StatefulWidget {
   final Map<String, dynamic> organization;
@@ -17,45 +19,40 @@ class OrganizationDashboard extends StatefulWidget {
 class _OrganizationDashboardState extends State<OrganizationDashboard> {
   // track bottom nav selection
   int currentIndex = 0;
-  // TODO: [MVVM] move UI state (selectedIndex, balance fetch) into OrganizationDashboardViewModel
-  int _selectedIndex = 0;
-  final FinancialService _financialService = FinancialService();
-  late Future<double> _balanceFuture;
+  late FinancialViewModel _financialViewModel;
+  late OrganizationDashboardViewModel _dashboardViewModel;
 
   @override
   void initState() {
     super.initState();
-    _balanceFuture = _loadBalance();
+    _financialViewModel = FinancialViewModel();
+    _dashboardViewModel = OrganizationDashboardViewModel(
+      financialViewModel: _financialViewModel,
+    );
+    _loadBalance();
+    _financialViewModel.addListener(_onViewModelChanged);
   }
-
-  // TODO: [MVVM] replace with ViewModel.loadBalance() and observe via Provider/Consumer
-  Future<double> _loadBalance() async {
-    try {
-      final transactions = await _financialService
-          .fetchTransactions(widget.organization['id'].toString());
-      return _financialService.calculateBalance(widget.organization, transactions);
-    } catch (_) {
-      return double.tryParse(widget.organization['budget']?.toString() ?? '') ?? 0;
-    }
-  }
-  int _selectedIndex = 0;
-  final FinancialService _financialService = FinancialService();
-  late Future<double> _balanceFuture;
 
   @override
-  void initState() {
-    super.initState();
-    _balanceFuture = _loadBalance();
+  void dispose() {
+    _financialViewModel.removeListener(_onViewModelChanged);
+    _financialViewModel.dispose();
+    _dashboardViewModel.dispose();
+    super.dispose();
   }
 
-  Future<double> _loadBalance() async {
-    try {
-      final transactions = await _financialService
-          .fetchTransactions(widget.organization['id'].toString());
-      return _financialService.calculateBalance(widget.organization, transactions);
-    } catch (_) {
-      return double.tryParse(widget.organization['budget']?.toString() ?? '') ?? 0;
-    }
+  void _onViewModelChanged() {
+    setState(() {});
+  }
+
+  /// Loads balance using ViewModel
+  Future<void> _loadBalance() async {
+    await _financialViewModel
+        .fetchTransactions(widget.organization['id'].toString());
+    _dashboardViewModel.calculateFinancialSummary(
+      widget.organization,
+      _financialViewModel.transactions,
+    );
   }
 
   @override
@@ -102,10 +99,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      _buildProjectsList(),
-                      _buildSectionHeader("Active Projects", "See All"),
-                      const SizedBox(height: 12),
-                      _buildProjectsList(),
+                      _buildProjectsListFromViewModel(context),
                       const SizedBox(height: 100),
                     ]),
                   ),
@@ -188,21 +182,14 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
             ],
           ),
           const SizedBox(height: 8),
-          // TODO: Replace with actual balance data
+          // Bind balance from ViewModel
           Text(
-            "P45,280.00",
+            _formatCurrency(_dashboardViewModel.currentBalance),
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 30,
               fontWeight: FontWeight.bold,
             ),
-          // TODO: [MVVM] bind balance from ViewModel instead of local FutureBuilder
-          FutureBuilder<double>(
-            future: _balanceFuture,
-            builder: (context, snapshot) {
-              final balance = snapshot.data ?? (double.tryParse(widget.organization['budget']?.toString() ?? '') ?? 0);
-              return Text(_formatCurrency(balance), style: GoogleFonts.inter(color: Colors.white, fontSize: 30, fontWeight: FontWeight.bold));
-            },
           ),
           const SizedBox(height: 20),
           ElevatedButton(
@@ -294,12 +281,74 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
     );
   }
 
-  Widget _buildProjectCard(String title, String sub, double progress, String days, Color color) {
+  Widget _buildProjectsListFromViewModel(BuildContext context) {
+    return Consumer<ProjectsViewModel>(
+      builder: (context, projectsViewModel, _) {
+        // Initialize projects from ViewModel if not already loaded
+        if (projectsViewModel.currentOrganizationId == null ||
+            projectsViewModel.currentOrganizationId !=
+                widget.organization['id'].toString()) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            projectsViewModel.fetchProjects(
+                widget.organization['id'].toString());
+          });
+        }
+
+        if (projectsViewModel.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (projectsViewModel.projects.isEmpty) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Text(
+                "No projects yet. Create one to get started!",
+                style: GoogleFonts.inter(color: Colors.grey),
+              ),
+            ),
+          );
+        }
+
+        return SizedBox(
+          height: 180,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: projectsViewModel.projects.length,
+            itemBuilder: (context, index) {
+              final project = projectsViewModel.projects[index];
+              return Padding(
+                padding: EdgeInsets.only(
+                  left: index == 0 ? 0 : 16,
+                  right: index == projectsViewModel.projects.length - 1 ? 0 : 0,
+                ),
+                child: _buildProjectCard(
+                  project['name'] ?? 'Untitled',
+                  project['description'] ?? 'No description',
+                  0.0, // Progress not yet tracked
+                  'In Progress',
+                  const Color(0xFF137FEC),
+                  project: project,
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProjectCard(String title, String sub, double progress, String days, Color color, {Map<String, dynamic>? project}) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const ProjectOverviewScreen()),
+          MaterialPageRoute(
+            builder: (context) => ProjectOverviewScreen(
+              organization: widget.organization,
+              project: project,
+            ),
+          ),
         );
       },
       child: Container(
@@ -334,22 +383,18 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
   }
 
   Widget _buildBottomNav() {
-    // TODO: [MVVM] move _selectedIndex and nav logic into ViewModel, e.g. OrganizationDashboardViewModel.currentTab
-
-  Widget _buildBottomNav() {
-    // Napoleon: Removed BottomNav from Org Selection and consolidated logic in Main Dashboard.
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
       decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
       child: BottomNavigationBar(
-        currentIndex: _selectedIndex,
+        currentIndex: currentIndex,
         onTap: (index) {
           if (index == 1) {
             Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization)));
           } else if (index == 2) {
             Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => FinancialLedgerScreen(initialIndex: 2, organization: widget.organization)));
           } else {
-            setState(() { _selectedIndex = index; });
+            setState(() { currentIndex = index; });
           }
         },
         type: BottomNavigationBarType.fixed,

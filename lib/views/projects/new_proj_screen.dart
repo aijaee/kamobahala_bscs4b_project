@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'projects_list.dart';
+import '../../viewmodels/projects_viewmodel.dart';
 
 // ── Brand constants (shared with CreateOrganizationScreen) ───────────────────
 const kPrimary = Color(0xFF1A73E8);
@@ -13,7 +15,6 @@ const kTextSecondary = Color(0xFF6B7280);
 const kRed = Color(0xFFE53935);
 
 class CreateProjectScreen extends StatefulWidget {
-  // TODO: [MVVM] organization should be part of ViewModel state; pass only ID/context in View constructor
   final Map<String, dynamic> organization;
   const CreateProjectScreen({super.key, required this.organization});
 
@@ -126,7 +127,6 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: [MVVM] this screen should consume CreateProjectViewModel for submit state, validation, and save
     return Scaffold(
       backgroundColor: kSurface,
 
@@ -156,89 +156,127 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         ),
       ),
 
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+      body: Consumer<ProjectsViewModel>(
+        builder: (context, viewModel, _) {
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
 
-                // ── Project Name ─────────────────────────────────────────────
-                _label("Project Name"),
-                TextFormField(
-                  controller: nameController,
-                  style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
-                  decoration: _inputDecoration("e.g. Q4 Marketing Campaign"),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Project name is required";
-                    }
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 18),
-
-                // ── Description ──────────────────────────────────────────────
-                _label("Description"),
-                TextFormField(
-                  controller: descriptionController,
-                  maxLines: 4,
-                  style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
-                  decoration: _inputDecoration("Outline project goals and deliverables..."),
-                ),
-
-                const SizedBox(height: 18),
-
-                // ── Project Timeline ─────────────────────────────────────────
-                _buildTimelineCard(),
-
-                const SizedBox(height: 14),
-
-                // ── Budget Allocation ────────────────────────────────────────
-                _buildBudgetCard(),
-
-                const SizedBox(height: 32),
-
-                // ── Create Project Button ────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kPrimary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 15),
+                    // ── Project Name ─────────────────────────────────────────────
+                    _label("Project Name"),
+                    TextFormField(
+                      controller: nameController,
+                      style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
+                      decoration: _inputDecoration("e.g. Q4 Marketing Campaign"),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return "Project name is required";
+                        }
+                        return null;
+                      },
                     ),
-                    onPressed: () {
-                      // TODO: [MVVM] call viewModel.createProject(...) and handle response state in provider
-                      if (_formKey.currentState!.validate()) {
-                        // TODO: implement create project functionalities
-                      }
-                    },
-                    child: Text(
-                      "Create Project",
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
+
+                    const SizedBox(height: 18),
+
+                    // ── Description ──────────────────────────────────────────────
+                    _label("Description"),
+                    TextFormField(
+                      controller: descriptionController,
+                      maxLines: 4,
+                      style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
+                      decoration: _inputDecoration("Outline project goals and deliverables..."),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // ── Project Timeline ─────────────────────────────────────────
+                    _buildTimelineCard(),
+
+                    const SizedBox(height: 14),
+
+                    // ── Budget Allocation ────────────────────────────────────────
+                    _buildBudgetCard(),
+
+                    const SizedBox(height: 32),
+
+                    // ── Create Project Button ────────────────────────────────────
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kPrimary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                        ),
+                        onPressed: viewModel.isLoading
+                            ? null
+                            : () => _handleCreateProject(context, viewModel),
+                        child: Text(
+                          viewModel.isLoading ? "Creating..." : "Create Project",
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
 
-                const SizedBox(height: 16),
-              ],
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
+  }
+
+  Future<void> _handleCreateProject(BuildContext context, ProjectsViewModel viewModel) async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final projectData = {
+      'name': nameController.text,
+      'description': descriptionController.text,
+      'budget': double.tryParse(budgetController.text) ?? 0,
+      'start_date': startDate?.toIso8601String(),
+      'due_date': endDate?.toIso8601String(),
+      'status': 'active',
+    };
+
+    // Set the organization for the viewModel if not already set
+    if (viewModel.currentOrganizationId == null ||
+        viewModel.currentOrganizationId != widget.organization['id'].toString()) {
+      viewModel.fetchProjects(widget.organization['id'].toString());
+    }
+
+    final success = await viewModel.createProject(projectData);
+
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Project created successfully')),
+      );
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization),
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to create project')),
+      );
+    }
   }
 
   // ── Project Timeline Card ────────────────────────────────────────────────────
@@ -428,29 +466,23 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           const SizedBox(height: 10),
 
           // Central Depository Balance row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Central Depository Balance",
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: kTextSecondary,
-                ),
-              ),
-              Text(
-                 // TODO: replace with dynamic balance
-                "₱142,500.00",
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: kTextPrimary,
-                ),
-              ),
-            ],
+          Text(
+            "Central Depository Balance",
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: kTextSecondary,
+            ),
           ),
-
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
+          Text(
+            "₱${widget.organization['budget']?.toString() ?? '0.00'}",
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: kTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 10),
 
           Text(
             "Funds will be locked upon project creation.",

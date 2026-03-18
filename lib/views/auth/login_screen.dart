@@ -144,7 +144,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 32),
 
                       if (isRegister) ...[
-                        // Napoleon: Final backend integration for registration and dummy data.
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -212,14 +211,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                   fontSize: 14,
                                 ),
                               ),
-
-                              // Text(
-                              //   "Forgot?",
-                              //   style: TextStyle(
-                              //     color: Color(0xFF137FEC),
-                              //     fontWeight: FontWeight.w600,
-                              //   ),
-                              // )
                             ],
                           ),
                           const SizedBox(height: 8),
@@ -290,7 +281,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             if (authVM.isLoading) return;
 
                             if (isRegister) {
-                              // Napoleon: Final backend integration for registration and dummy data.
                               final success = await authVM.register(
                                 emailController.text,
                                 passwordController.text,
@@ -298,7 +288,6 @@ class _LoginScreenState extends State<LoginScreen> {
                               );
 
                               if (success && context.mounted) {
-                                // Napoleon: Fixed registration navigation and dynamic name sync.
                                 setState(() {
                                   isRegister = false;
                                 });

@@ -1,15 +1,14 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../dashboard/organization_dashboard.dart';
-import '../../core/services/financial_service.dart';
-import '../../core/services/project_service.dart';
+import '../../viewmodels/financial_viewmodel.dart';
+import '../../viewmodels/organization_dashboard_viewmodel.dart';
+import '../../viewmodels/projects_viewmodel.dart';
+import '../dashboard/financial_ledger.dart';
 import 'new_proj_screen.dart';
-import '../dashboard/financial_ledger.dart';
-import '../../core/services/financial_service.dart';
-import '../../core/services/project_service.dart';
-
-import '../dashboard/financial_ledger.dart';
+import 'project_overview.dart';
 
 class ProjectsList extends StatefulWidget {
   final int initialIndex;
@@ -22,15 +21,10 @@ class ProjectsList extends StatefulWidget {
 }
 
 class _ProjectsListState extends State<ProjectsList> {
-  // TODO: [MVVM] move these into ViewModel: currentIndex, selectedTab, projects, completedProjects, isLoading, balance, searchQuery
-  late int currentIndex;
   late int currentIndex;
   int selectedTab = 0;
-  final ProjectService _projectService = ProjectService();
-  final FinancialService _financialService = FinancialService();
-  List<Map<String, dynamic>> _projects = [];
-  List<Map<String, dynamic>> _completedProjects = [];
-  bool _isLoading = true;
+  late FinancialViewModel _financialViewModel;
+  late OrganizationDashboardViewModel _dashboardViewModel;
   double _balance = 0;
   String _searchQuery = "";
 
@@ -44,39 +38,41 @@ class _ProjectsListState extends State<ProjectsList> {
   @override
   void initState() {
     super.initState();
-    // TODO: [MVVM] move this to ViewModel initialization and remove direct service calls
-  void initState() {
-    super.initState();
     currentIndex = widget.initialIndex;
-    _fetchProjects();
-    _fetchCompletedProjects();
+    _financialViewModel = FinancialViewModel();
+    _dashboardViewModel = OrganizationDashboardViewModel(
+      financialViewModel: _financialViewModel,
+    );
     _fetchBalance();
+    
+    // Initialize projects in ViewModel
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<ProjectsViewModel>().fetchProjects(widget.organization['id'].toString());
+        context.read<ProjectsViewModel>().fetchCompletedProjects();
+      }
+    });
   }
 
-  // TODO: [MVVM] implement fetchProjects() in ViewModel and call from init
-  Future<void> _fetchProjects() async {
-    final projects = await _projectService
-        .fetchProjects(widget.organization['id'].toString());
-    if (mounted) {
-      setState(() {
-        _projects = projects;
-        _isLoading = false;
-      });
-    }
+  @override
+  void dispose() {
+    _financialViewModel.dispose();
+    _dashboardViewModel.dispose();
+    super.dispose();
   }
 
-  // TODO: [MVVM] replace with ViewModel.fetchBalance() and observe via Provider
   Future<void> _fetchBalance() async {
     try {
-      final transactions = await _financialService
+      await _financialViewModel
           .fetchTransactions(widget.organization['id'].toString());
+      _dashboardViewModel.calculateFinancialSummary(
+        widget.organization,
+        _financialViewModel.transactions,
+      );
 
       if (mounted) {
         setState(() {
-          _balance = _financialService.calculateBalance(
-            widget.organization,
-            transactions,
-          );
+          _balance = _dashboardViewModel.currentBalance;
         });
       }
     } catch (_) {
@@ -89,61 +85,9 @@ class _ProjectsListState extends State<ProjectsList> {
     }
   }
 
-  Future<void> _fetchCompletedProjects() async {
-    try {
-      final projects = await _projectService
-          .fetchProjects(widget.organization['id'].toString());
-      final completed = projects.where((p) => p['status'] == 'completed').toList();
-      
-      if (mounted) {
-        setState(() {
-          _completedProjects = completed;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error fetching completed projects: $e');
-    }
-  }
-
-  List<Map<String, dynamic>> _getFilteredProjects() {
-    return _projects.where((project) {
-      // Filter by search query
-      final matchesSearch = _searchQuery.isEmpty ||
-          project['name']
-              .toString()
-              .toLowerCase()
-              .contains(_searchQuery.toLowerCase());
-
-      // Filter by selected tab
-      final matchesTab = selectedTab == 0 ||
-          project['department'] == tabs[selectedTab];
-
-      return matchesSearch && matchesTab;
-    }).toList();
-  }
-
-  @override
-
-  Widget build(BuildContext context) {
-
-  Future<void> _fetchCompletedProjects() async {
-    try {
-      final projects = await _projectService
-          .fetchProjects(widget.organization['id'].toString());
-      final completed = projects.where((p) => p['status'] == 'completed').toList();
-      
-      if (mounted) {
-        setState(() {
-          _completedProjects = completed;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error fetching completed projects: $e');
-    }
-  }
-
-  List<Map<String, dynamic>> _getFilteredProjects() {
-    return _projects.where((project) {
+  List<Map<String, dynamic>> _getFilteredProjects(
+      List<Map<String, dynamic>> projects) {
+    return projects.where((project) {
       // Filter by search query
       final matchesSearch = _searchQuery.isEmpty ||
           project['name']
@@ -167,13 +111,12 @@ class _ProjectsListState extends State<ProjectsList> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF137FEC),
         onPressed: () {
-          // Show dialog to create new project
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Create new project functionality coming soon..."),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CreateProjectScreen(organization: widget.organization),
             ),
           );
-          // TODO: Implement create project dialog/form
         },
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -229,121 +172,97 @@ class _ProjectsListState extends State<ProjectsList> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _header(),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                children: [
-                  _buildFinancialCard(),
-                  const SizedBox(height: 20),
-                  // TODO: add if condition to allow user to delete a project if they are an admin
-                  _sectionHeader("Ongoing Projects", ""),
-                  const SizedBox(height: 12),
-                  // Dynamic data fetching with search and tab filtering
-                  // TODO: [MVVM] remove direct loading condition and use ViewModel.isLoading instead
-                  if (_isLoading)
-                    const Center(child: CircularProgressIndicator())
-                  else
-                    ..._getFilteredProjects().isEmpty
-                        ? [
-                            const Center(
-                                child: Padding(
-                              padding: EdgeInsets.all(20.0),
-                              child: Text("No projects found."),
-                            ))
-                          ]
-                        : _getFilteredProjects()
-                            .map((project) {
-                            // Calculate placeholder progress/spent since schema might not have it yet
-                            double progress = 0.0;
-                            // Ensure budget is parsed safely
-                            String budget = project['budget'] != null
-                                ? "₱${project['budget']}"
-                                : "₱0";
-                  _buildFinancialCard(),
-                  const SizedBox(height: 20),
-                  _sectionHeader("Ongoing Projects", ""),
-                  const SizedBox(height: 12),
-                  // Dynamic data fetching with search and tab filtering
-                  if (_isLoading)
-                    const Center(child: CircularProgressIndicator())
-                  else
-                    ..._getFilteredProjects().isEmpty
-                        ? [
-                            const Center(
-                                child: Padding(
-                              padding: EdgeInsets.all(20.0),
-                              child: Text("No projects found."),
-                            ))
-                          ]
-                        : _getFilteredProjects()
-                            .map((project) {
-                            // Calculate placeholder progress/spent since schema might not have it yet
-                            double progress = 0.0;
-                            // Ensure budget is parsed safely
-                            String budget = project['budget'] != null
-                                ? "₱${project['budget']}"
-                                : "₱0";
-
-                            return _projectCard(
-                              tag: project['status'] ?? "Active",
-                              title: project['name'] ?? "Untitled Project",
-                              progress: progress,
-                              spent: "₱0",
-                              limit: budget,
-                              color: const Color(0xFF137FEC),
-                              onTap: () {
-                                // Navigate to project details
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                        "Navigating to ${project['name']} details..."),
-                                  ),
-                                );
-                                // TODO: Replace with actual project details navigation
-                                // Navigator.push(
-                                //   context,
-                                //   MaterialPageRoute(
-                                //     builder: (_) => ProjectDetailsScreen(
-                                //       project: project,
-                                //       organization: widget.organization,
-                                //     ),
-                                //   ),
-                                // );
-                              },
-                            );
-                          }).toList(),
-                  const SizedBox(height: 20),
-                  _sectionHeader("Completed", ""),
-                  const SizedBox(height: 12),
-                  ..._completedProjects.isEmpty
-                      ? [
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(20.0),
-                              child: Text("No completed projects yet."),
-                            ),
-                          )
-                        ]
-                      : _completedProjects.map((project) {
-                          final budget = project['budget'] != null
+      body: Consumer<ProjectsViewModel>(
+        builder: (context, projectsViewModel, _) {
+          return SafeArea(
+            child: Column(
+              children: [
+                _header(),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+                    children: [
+                      _buildFinancialCard(),
+                      const SizedBox(height: 20),
+                      _sectionHeader("Ongoing Projects", ""),
+                      const SizedBox(height: 12),
+                      // Dynamic data fetching with search and tab filtering
+                      if (projectsViewModel.isLoading)
+                        const Center(child: CircularProgressIndicator())
+                      else if (_getFilteredProjects(projectsViewModel.projects).isEmpty)
+                        const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: Text("No projects found."),
+                          ),
+                        )
+                      else
+                        ..._getFilteredProjects(projectsViewModel.projects)
+                            .asMap()
+                            .entries
+                            .map((entry) {
+                          final project = entry.value;
+                          final isLast = entry.key == _getFilteredProjects(projectsViewModel.projects).length - 1;
+                          double progress = 0.0;
+                          String budget = project['budget'] != null
                               ? "₱${project['budget']}"
                               : "₱0";
-                          return _completedCard(
-                            title: project['name'] ?? "Project",
-                            amount: budget,
-                            completedDate:
-                                project['due_date'] ?? "Recently completed",
+
+                          return Column(
+                            children: [
+                              _projectCard(
+                                tag: project['status'] ?? "Active",
+                                title: project['name'] ?? "Untitled Project",
+                                progress: progress,
+                                spent: "₱0",
+                                limit: budget,
+                                color: const Color(0xFF137FEC),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ProjectOverviewScreen(
+                                        organization: widget.organization,
+                                        project: project,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                              if (!isLast) const SizedBox(height: 12),
+                            ],
                           );
                         }).toList(),
-                ],
-              ),
-            )
-          ],
-        ),
+                      const SizedBox(height: 20),
+                      _sectionHeader("Completed", ""),
+                      const SizedBox(height: 12),
+                      ...projectsViewModel.completedProjects.isEmpty
+                          ? [
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(20.0),
+                                  child: Text("No completed projects yet."),
+                                ),
+                              )
+                            ]
+                          : projectsViewModel.completedProjects.map((project) {
+                              final budget = project['budget'] != null
+                                  ? "₱${project['budget']}"
+                                  : "₱0";
+                              return _completedCard(
+                                title: project['name'] ?? "Project",
+                                amount: budget,
+                                completedDate:
+                                    project['due_date'] ?? "Recently completed",
+                              );
+                            }).toList(),
+                    ],
+                  ),
+                )
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -368,11 +287,6 @@ class _ProjectsListState extends State<ProjectsList> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-
-                  IconButton(
-                    onPressed:(){},
-                    icon: const Icon(Icons.add_circle_outline)
-                  )
                   IconButton(
                       onPressed: () {
                         ScaffoldMessenger.of(context).showSnackBar(

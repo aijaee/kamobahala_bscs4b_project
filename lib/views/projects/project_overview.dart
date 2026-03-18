@@ -7,6 +7,7 @@ import 'task_list_screen.dart';
 
 class ProjectOverviewScreen extends StatefulWidget {
   final Map<String, dynamic> organization;
+  final Map<String, dynamic>? project;
 
   const ProjectOverviewScreen({
     super.key,
@@ -15,6 +16,7 @@ class ProjectOverviewScreen extends StatefulWidget {
       'name': 'Sample University Org',
       'budget': 20000.0,
     },
+    this.project,
   });
 
   @override
@@ -89,7 +91,7 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> {
         onPressed: () => Navigator.pop(context),
       ),
       title: Text(
-        "Project Overview",
+        widget.project?['name'] ?? "Project Overview",
         style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
       ),
       centerTitle: true,
@@ -100,6 +102,10 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> {
   }
 
   Widget _buildMainProgressCard() {
+    final projectName = widget.project?['name'] ?? 'CS Gala Preparation';
+    final budget = widget.project?['budget'] ?? 0;
+    final status = widget.project?['status'] ?? 'active';
+    
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
@@ -136,9 +142,9 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          Text("CS Gala Preparation", textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(projectName, textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
-          Text("12 tasks remaining • Due in 8 days", style: GoogleFonts.inter(color: const Color(0xFF617589))),
+          Text("Budget: ₱${budget.toString()}", style: GoogleFonts.inter(color: const Color(0xFF617589))),
         ],
       ),
     );

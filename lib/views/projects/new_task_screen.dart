@@ -43,7 +43,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
     return AppBar(
       backgroundColor: Colors.white,
       elevation: 0.5,
-      // Fixed the "Can-cel" alignment issue by providing more width
       leadingWidth: 80,
       leading: Center(
         child: GestureDetector(

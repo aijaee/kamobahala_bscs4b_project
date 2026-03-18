@@ -3,7 +3,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class DepositoryService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  // TODO: [MVVM] move this data layer into RepositoryViewModel or DepositoryViewModel
   // Fetches all repositories
   Future<List<Map<String, dynamic>>> getRepositories() async {
     return await _client.from('repositories').select();

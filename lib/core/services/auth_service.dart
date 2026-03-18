@@ -14,11 +14,9 @@ class AuthService {
   }
 
   // Handles user registration with Supabase
-  // Napoleon: Fixed atomic registration and database sync.
   Future<AuthResponse> register(String email, String password,
       {String? fullName}) async {
     try {
-      // 1. Atomic Registration: Create Auth User and pass name in metadata.
       final response = await _client.auth.signUp(
         email: email,
         password: password,
@@ -30,10 +28,8 @@ class AuthService {
             "Registration failed: No user returned from Supabase.");
       }
 
-      // 2. Explicitly insert into profiles table & VERIFY
       if (fullName != null) {
         try {
-          // Retry Logic
           await Future.delayed(const Duration(milliseconds: 500));
 
           await _client.from('profiles').upsert({
@@ -43,14 +39,12 @@ class AuthService {
             'updated_at': DateTime.now().toIso8601String(),
           });
         } catch (e) {
-          // Error Handling
-          // Napoleon: Standardized navigation, secured config keys, and implemented dynamic data fetching.
+          // Silently handle profile creation errors
         }
       }
 
       return response;
     } catch (e) {
-      // 3. Error Cleanup: Sign out the new user if profile creation fails.
       if (_client.auth.currentUser != null) {
         await _client.auth.signOut();
       }
@@ -69,7 +63,6 @@ class AuthService {
   // Listen to auth state changes
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
-  // Napoleon: Implemented live backend integration.
   Future<Map<String, dynamic>?> getUserProfile() async {
     final user = currentUser;
     if (user == null) return null;

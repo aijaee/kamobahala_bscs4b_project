@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'projects_list.dart';
+import '../../viewmodels/projects_viewmodel.dart';
 
 // ── Brand constants (shared with CreateOrganizationScreen) ───────────────────
-// TODO: [Static] this file is currently using static edit data; switch to ViewModel/Service data source
 const kPrimary = Color(0xFF1A73E8);
 const kPrimaryDark = Color(0xFF0B539B);
 const kSurface = Color(0xFFF5F7FA);
@@ -14,10 +15,9 @@ const kTextSecondary = Color(0xFF6B7280);
 const kRed = Color(0xFFE53935);
 
 class EditProjectScreen extends StatefulWidget {
-  // TODO: [MVVM] project object should be part of ViewModel state; pass only ID/context in View constructor
-  final Map<String, dynamic>? project;
+  final String projectId;
   final Map<String, dynamic> organization;
-  const EditProjectScreen({super.key, this.project, required this.organization});
+  const EditProjectScreen({super.key, required this.projectId, required this.organization});
 
   @override
   State<EditProjectScreen> createState() => _EditProjectScreenState();
@@ -36,25 +36,24 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
   @override
   void initState() {
     super.initState();
-    // TODO: [Static] replace with data from ViewModel / API for selected project
-    final existing = widget.project ?? {
-      'name': 'Q4 Marketing Campaign',
-      'description': 'Improve brand reach and lead generation.',
-      'budget': '85000',
-      'startDate': DateTime.now().subtract(Duration(days: 14)),
-      'endDate': DateTime.now().add(Duration(days: 76)),
-    };
+    // Load project data from ViewModel
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final viewModel = context.read<ProjectsViewModel>();
+      viewModel.fetchProject(widget.projectId);
+    });
+  }
 
-    nameController.text = existing['name']?.toString() ?? '';
-    descriptionController.text = existing['description']?.toString() ?? '';
-    budgetController.text = existing['budget']?.toString() ?? '';
+  void _initializeForm(Map<String, dynamic> project) {
+    nameController.text = project['name']?.toString() ?? '';
+    descriptionController.text = project['description']?.toString() ?? '';
+    budgetController.text = project['budget']?.toString() ?? '';
 
-    startDate = existing['startDate'] is DateTime
-        ? existing['startDate']
-        : DateTime.now().subtract(Duration(days: 14));
-    endDate = existing['endDate'] is DateTime
-        ? existing['endDate']
-        : DateTime.now().add(Duration(days: 76));
+    startDate = project['start_date'] is String
+        ? DateTime.tryParse(project['start_date'])
+        : project['start_date'] as DateTime?;
+    endDate = project['due_date'] is String
+        ? DateTime.tryParse(project['due_date'])
+        : project['due_date'] as DateTime?;
   }
 
   // ── Shared input decoration ─────────────────────────────────────────────────
@@ -152,7 +151,6 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: [MVVM] this screen should consume CreateProjectViewModel for submit state, validation, and save
     return Scaffold(
       backgroundColor: kSurface,
 
@@ -182,92 +180,130 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
         ),
       ),
 
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+      body: Consumer<ProjectsViewModel>(
+        builder: (context, viewModel, _) {
+          if (viewModel.isLoading && viewModel.currentProject == null) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-                // ── Project Name ─────────────────────────────────────────────
-                _label("Project Name"),
-                TextFormField(
-                  controller: nameController,
-                  style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
-                  decoration: _inputDecoration("e.g. Q4 Marketing Campaign"),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Project name is required";
-                    }
-                    return null;
-                  },
-                ),
+          // Initialize form when project is loaded
+          if (viewModel.currentProject != null && nameController.text.isEmpty) {
+            _initializeForm(viewModel.currentProject!);
+          }
 
-                const SizedBox(height: 18),
+          return SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
 
-                // ── Description ──────────────────────────────────────────────
-                _label("Description"),
-                TextFormField(
-                  controller: descriptionController,
-                  maxLines: 4,
-                  style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
-                  decoration: _inputDecoration("Outline project goals and deliverables..."),
-                ),
-
-                const SizedBox(height: 18),
-
-                // ── Project Timeline ─────────────────────────────────────────
-                _buildTimelineCard(),
-
-                const SizedBox(height: 14),
-
-                // ── Budget Allocation ────────────────────────────────────────
-                _buildBudgetCard(),
-
-                const SizedBox(height: 32),
-
-                // ── Create Project Button ────────────────────────────────────
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: kPrimary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 15),
+                    // ── Project Name ─────────────────────────────────────────────
+                    _label("Project Name"),
+                    TextFormField(
+                      controller: nameController,
+                      style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
+                      decoration: _inputDecoration("e.g. Q4 Marketing Campaign"),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return "Project name is required";
+                        }
+                        return null;
+                      },
                     ),
-                    onPressed: () {
-                      // TODO: [MVVM] call viewModel.updateProject(...) and handle response state in provider
-                      if (_formKey.currentState!.validate()) {
-                        // TODO: sample static update flow for UI:
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Project saved (static mock)')),
-                        );
-                      }
-                    },
-                    child: Text(
-                      "Save Changes",
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
+
+                    const SizedBox(height: 18),
+
+                    // ── Description ──────────────────────────────────────────────
+                    _label("Description"),
+                    TextFormField(
+                      controller: descriptionController,
+                      maxLines: 4,
+                      style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
+                      decoration: _inputDecoration("Outline project goals and deliverables..."),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    // ── Project Timeline ─────────────────────────────────────────
+                    _buildTimelineCard(),
+
+                    const SizedBox(height: 14),
+
+                    // ── Budget Allocation ────────────────────────────────────────
+                    _buildBudgetCard(),
+
+                    const SizedBox(height: 32),
+
+                    // ── Save Changes Button ──────────────────────────────────────
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kPrimary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                        ),
+                        onPressed: viewModel.isLoading
+                            ? null
+                            : () => _handleSaveProject(context, viewModel),
+                        child: Text(
+                          viewModel.isLoading ? "Saving..." : "Save Changes",
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
 
-                const SizedBox(height: 16),
-              ],
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
+  }
+
+  Future<void> _handleSaveProject(BuildContext context, ProjectsViewModel viewModel) async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final updates = {
+      'name': nameController.text,
+      'description': descriptionController.text,
+      'budget': double.tryParse(budgetController.text) ?? 0,
+      'start_date': startDate?.toIso8601String(),
+      'due_date': endDate?.toIso8601String(),
+      'status': 'active',
+    };
+
+    final success = await viewModel.updateProject(widget.projectId, updates);
+
+    if (success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Project updated successfully')),
+      );
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization),
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to update project')),
+      );
+    }
   }
 
   // ── Project Timeline Card ────────────────────────────────────────────────────
@@ -453,33 +489,26 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
           ),
 
           const SizedBox(height: 10),
+
+          Text(
+            "Central Depository Balance",
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: kTextSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "₱${widget.organization['budget']?.toString() ?? '0.00'}",
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: kTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 10),
           Divider(color: kBorder, height: 1),
           const SizedBox(height: 10),
-
-          // Central Depository Balance row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Central Depository Balance",
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: kTextSecondary,
-                ),
-              ),
-              Text(
-                 // TODO: replace with dynamic balance
-                "₱142,500.00",
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: kTextPrimary,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 6),
 
           Text(
             "Funds will be locked upon project creation.",
