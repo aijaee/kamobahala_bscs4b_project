@@ -12,8 +12,6 @@ class AuthViewModel extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   Future<bool> login(String email, String password) async {
-    // Napoleon: Implemented live backend integration.
-    // Handles Supabase password authentication
     _setLoading(true);
     _errorMessage = null;
 
@@ -27,7 +25,6 @@ class AuthViewModel extends ChangeNotifier {
       _setLoading(false);
       return true;
     } catch (e) {
-      // Napoleon: Fixed registration flow and dynamic name sync.
       if (e is AuthException) {
         _errorMessage = e.message;
       } else {
@@ -39,15 +36,12 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   // Handles user registration
-  // Napoleon: Fixed atomic registration and database sync.
   Future<bool> register(String email, String password,
       {String? fullName}) async {
     _setLoading(true);
     _errorMessage = null;
 
     try {
-      // Awaits the full registration and profile sync pipeline.
-      // AuthService handles the all-or-nothing logic.
       await _authService.register(email, password, fullName: fullName);
       _setLoading(false);
       return true;

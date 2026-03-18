@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../core/services/financial_service.dart';
+import '../../viewmodels/financial_viewmodel.dart';
+import '../../viewmodels/organization_dashboard_viewmodel.dart';
 import 'organization_dashboard.dart';
 import '../projects/projects_list.dart';
 
@@ -15,48 +16,52 @@ class FinancialLedgerScreen extends StatefulWidget {
 }
 
 class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
-  // TODO: [MVVM] move these into ViewModel: currentIndex, filters, transactions, isLoading, selectedFilterIndex
   late int currentIndex;
-  final FinancialService _financialService = FinancialService();
-  final List<String> _filters = ['All', 'Income', 'Expenses'];
-  List<Map<String, dynamic>> _transactions = [];
-  bool _isLoading = true;
-  int _selectedFilterIndex = 0;
+  late FinancialViewModel _viewModel;
+  late OrganizationDashboardViewModel _dashboardViewModel;
 
   @override
   void initState() {
     super.initState();
     currentIndex = widget.initialIndex;
+    _viewModel = FinancialViewModel();
+    _dashboardViewModel = OrganizationDashboardViewModel(
+      financialViewModel: _viewModel,
+    );
     _fetchTransactions();
+    _viewModel.addListener(_onViewModelChanged);
   }
 
-  // TODO: [MVVM] move transaction fetching to ViewModel.fetchTransactions() and notify listeners
+  @override
+  void dispose() {
+    _viewModel.removeListener(_onViewModelChanged);
+    _viewModel.dispose();
+    _dashboardViewModel.dispose();
+    super.dispose();
+  }
+
+  void _onViewModelChanged() {
+    setState(() {
+      // Update balance calculation when transactions change
+      _dashboardViewModel.calculateFinancialSummary(
+        widget.organization,
+        _viewModel.transactions,
+      );
+    });
+  }
+
+  /// Fetches transactions for the organization
   Future<void> _fetchTransactions() async {
-    try {
-      final transactions = await _financialService
-          .fetchTransactions(widget.organization['id'].toString());
-
-      if (!mounted) return;
-
-      setState(() {
-        _transactions = transactions;
-        _isLoading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-
-      setState(() {
-        _transactions = [];
-        _isLoading = false;
-      });
-    }
+    await _viewModel.fetchTransactions(widget.organization['id'].toString());
+    _dashboardViewModel.calculateFinancialSummary(
+      widget.organization,
+      _viewModel.transactions,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // TODO: [MVVM] use ViewModel.filteredTransactions / groupedTransactions state instead of local helper methods
-    final filteredTransactions = _filteredTransactions();
-    final groupedTransactions = _groupTransactions(filteredTransactions);
+    final groupedTransactions = _viewModel.groupedTransactions;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F8),
@@ -69,7 +74,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
             children: [
               _buildBalanceCard(),
               _buildFilterTabs(),
-              if (_isLoading)
+              if (_viewModel.isLoading)
                 const Padding(
                   padding: EdgeInsets.all(32),
                   child: Center(child: CircularProgressIndicator()),
@@ -85,8 +90,6 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
                 ),
             ],
           ),
-          // TODO: [MVVM] this should trigger a ViewModel action to update the state and open a transaction form screen/modal
-          // TODO: add if condition that only shows button if user is admin
           _buildFloatingActionButton(),
         ],
       ),
@@ -167,13 +170,8 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     );
   }
 
-  // TODO: [MVVM] bind balance to ViewModel.balance and remove local service calc
+  /// Builds the balance card using ViewModel balance
   Widget _buildBalanceCard() {
-    final balance = _financialService.calculateBalance(
-      widget.organization,
-      _transactions,
-    );
-
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(24),
@@ -202,7 +200,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            _formatCurrency(balance),
+            _formatCurrency(_dashboardViewModel.currentBalance),
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 36,
@@ -214,23 +212,21 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     );
   }
 
-  // TODO: [MVVM] move filter UI state to ViewModel.updateFilter(index) and use model filter list
+  /// Builds filter tabs using ViewModel filters
   Widget _buildFilterTabs() {
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: List.generate(
-          _filters.length,
+          _viewModel.filters.length,
           (index) => GestureDetector(
             onTap: () {
-              setState(() {
-                _selectedFilterIndex = index;
-              });
+              _viewModel.updateFilter(index);
             },
             child: _filterChip(
-              _filters[index],
-              _selectedFilterIndex == index,
+              _viewModel.filters[index],
+              _viewModel.selectedFilterIndex == index,
             ),
           ),
         ),
@@ -274,7 +270,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   }
 
   Widget _buildTransactionRow(Map<String, dynamic> transaction) {
-    final amount = _financialService.signedAmount(transaction);
+    final amount = _viewModel.getSignedAmount(transaction);
     final occurredAt = DateTime.tryParse(
           transaction['occurred_at']?.toString() ?? '',
         ) ??
@@ -407,73 +403,15 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     );
   }
 
-  List<Map<String, dynamic>> _filteredTransactions() {
-    if (_selectedFilterIndex == 1) {
-      return _transactions.where((transaction) {
-        return (transaction['transaction_type'] ?? '').toString().toLowerCase() ==
-            'income';
-      }).toList();
-    }
-
-    if (_selectedFilterIndex == 2) {
-      return _transactions.where((transaction) {
-        return (transaction['transaction_type'] ?? '').toString().toLowerCase() ==
-            'expense';
-      }).toList();
-    }
-
-    return _transactions;
-  }
-
-  List<(String, List<Map<String, dynamic>>)> _groupTransactions(
-    List<Map<String, dynamic>> transactions,
-  ) {
-    final Map<String, List<Map<String, dynamic>>> groups = {};
-
-    for (final transaction in transactions) {
-      final occurredAt = DateTime.tryParse(
-            transaction['occurred_at']?.toString() ?? '',
-          ) ??
-          DateTime.now();
-      final key = _dateHeaderLabel(occurredAt);
-      groups.putIfAbsent(key, () => []).add(transaction);
-    }
-
-    return groups.entries.map((entry) => (entry.key, entry.value)).toList();
-  }
-
   void _openCreateTransactionDialog() {
     showDialog(
       context: context,
       builder: (context) => _TransactionFormDialog(
         organizationId: widget.organization['id'].toString(),
-        financialService: _financialService,
-        onTransactionCreated: () {
-          // Refresh after dialog closes
-          Future.delayed(const Duration(milliseconds: 100), () {
-            if (mounted) {
-              _fetchTransactions();
-            }
-          });
-        },
+        viewModel: _viewModel,
+        onTransactionCreated: _fetchTransactions,
       ),
     );
-  }
-
-  String _dateHeaderLabel(DateTime date) {
-    final today = DateTime.now();
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-    final normalizedToday = DateTime(today.year, today.month, today.day);
-    final difference = normalizedToday.difference(normalizedDate).inDays;
-
-    if (difference == 0) {
-      return 'TODAY';
-    }
-    if (difference == 1) {
-      return 'YESTERDAY';
-    }
-
-    return '${_monthName(date.month)} ${date.day}, ${date.year}'.toUpperCase();
   }
 
   String _formatTime(DateTime date) {
@@ -485,14 +423,6 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     final minute = date.minute.toString().padLeft(2, '0');
     final period = date.hour >= 12 ? 'PM' : 'AM';
     return '$hour:$minute $period';
-  }
-
-  String _monthName(int month) {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ];
-    return months[month - 1];
   }
 
   String _formatCurrency(double amount) {
@@ -528,12 +458,12 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
 
 class _TransactionFormDialog extends StatefulWidget {
   final String organizationId;
-  final FinancialService financialService;
+  final FinancialViewModel viewModel;
   final VoidCallback onTransactionCreated;
 
   const _TransactionFormDialog({
     required this.organizationId,
-    required this.financialService,
+    required this.viewModel,
     required this.onTransactionCreated,
   });
 
@@ -733,17 +663,14 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
     setState(() => _isLoading = true);
 
     try {
-      await widget.financialService.createTransaction(
-        widget.organizationId,
-        {
-          'title': _titleController.text.trim(),
-          'description': _descriptionController.text.trim(),
-          'department': _departmentController.text.trim(),
-          'amount': amount,
-          'transaction_type': _transactionType,
-          'occurred_at': _occurredAt.toIso8601String(),
-        },
-      );
+      await widget.viewModel.createTransaction({
+        'title': _titleController.text.trim(),
+        'description': _descriptionController.text.trim(),
+        'department': _departmentController.text.trim(),
+        'amount': amount,
+        'transaction_type': _transactionType,
+        'occurred_at': _occurredAt.toIso8601String(),
+      });
 
       if (!mounted) return;
 

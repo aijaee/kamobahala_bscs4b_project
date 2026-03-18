@@ -13,7 +13,6 @@ const kTextSecondary = Color(0xFF6B7280);
 const kRed = Color(0xFFE53935);
 
 class EditOrganizationScreen extends StatefulWidget {
-  // Napoleon: Implemented live backend functionality.
   final Map<String, dynamic> organization;
   const EditOrganizationScreen({super.key, required this.organization});
 
@@ -37,8 +36,6 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
   void initState() {
     super.initState();
     // TODO: [MVVM] initialize ViewModel with widget.organization and remove text controller preset logic from view
-    // Napoleon: Implemented live backend functionality.
-    // Load organization details from the passed widget data
     nameController.text = widget.organization['name'] ?? '';
     descriptionController.text = widget.organization['description'] ?? '';
     budgetController.text = (widget.organization['budget'] ?? 0.0).toString();
@@ -309,8 +306,6 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                         ),
                         onPressed: () {
                           // TODO: [MVVM] call ViewModel.updateOrganization() instead of direct method
-                          // Napoleon: Implemented live backend functionality.
-                          // Napoleon: Implemented live backend functionality.
                           if (_formKey.currentState!.validate()) {
                             _updateOrganization();
                           }
@@ -334,9 +329,6 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
     );
   }
 
-  // TODO: [MVVM] move update logic to ViewModel and convert to async state updates
-
-  // Napoleon: Implemented live backend functionality.
   void _updateOrganization() async {
     // Show loading indicator
     showDialog(
@@ -353,11 +345,11 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
     try {
       await _orgService.updateOrganization(widget.organization['id'], data);
       if (!context.mounted) return;
-      Navigator.pop(context); // pop loading dialog
+      Navigator.pop(context);
       Navigator.pushReplacement(context,
           MaterialPageRoute(builder: (_) => const MainDashboardScreen()));
     } catch (e) {
-      Navigator.pop(context); // pop loading dialog
+      Navigator.pop(context);
       // TODO: Show a proper error message to the user
     }
   }

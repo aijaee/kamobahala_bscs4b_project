@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'viewmodels/auth_viewmodel.dart';
+import 'viewmodels/projects_viewmodel.dart';
 import 'views/auth/login_screen.dart';
-// 1. Ensure these imports are correct
-import 'views/dashboard/organization_dashboard.dart';
-import 'views/projects/project_overview.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -28,19 +26,12 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthViewModel()),
+        ChangeNotifierProvider(create: (_) => ProjectsViewModel()),
       ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: "Kamo Bahala",
-
-        // 2. TEMPORARY BYPASS: Pass a dummy organization map
-        home: const OrganizationDashboard(
-          organization: {
-            'id': 'test-123',
-            'name': 'Sample University Org',
-            'budget': 20000.0,
-          },
-        ),
+        home: const LoginScreen(),
       ),
     );
   }
