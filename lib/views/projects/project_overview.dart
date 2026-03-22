@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../dashboard/organization_dashboard.dart';
 import 'projects_list.dart';
 import '../dashboard/financial_ledger.dart';
 import 'task_list_screen.dart';
+import '../../viewmodels/tasks_viewmodel.dart';
+import '../../viewmodels/financial_viewmodel.dart';
 
 class ProjectOverviewScreen extends StatefulWidget {
   final Map<String, dynamic> organization;
@@ -25,6 +28,22 @@ class ProjectOverviewScreen extends StatefulWidget {
 
 class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> {
   int _selectedIndex = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch tasks and financial data for this project
+    if (widget.project != null && widget.project!['id'] != null) {
+      final projectId = widget.project!['id'];
+      final orgId = widget.organization['id'];
+      
+      // Fetch tasks for this project
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        context.read<TasksViewModel>().fetchProjectTasks(projectId);
+        context.read<FinancialViewModel>().fetchTransactions(orgId);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,20 +71,7 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                _buildMilestoneItem(
-                  title: "CS Gala Announcement Posting",
-                  subtitle: "Teasers and Main posting schedule",
-                  date: "March 25",
-                  icon: Icons.palette_outlined,
-                  isLocked: false,
-                ),
-                _buildMilestoneItem(
-                  title: "Buffet Menu Finalization",
-                  subtitle: "Finalizing the Menu for Catering",
-                  date: "April 5",
-                  icon: Icons.code,
-                  isLocked: true,
-                ),
+                _buildProjectSections(context),
                 const SizedBox(height: 24),
                 _buildTaskListButton(context),
               ],
@@ -77,6 +83,133 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> {
             right: 0,
             child: _buildBottomNav(context),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProjectSections(BuildContext context) {
+    return Consumer<TasksViewModel>(
+      builder: (context, tasksVM, _) {
+        if (tasksVM.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (tasksVM.tasksByCategory.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFF3F4F6)),
+            ),
+            child: Text(
+              "No project sections yet",
+              style: GoogleFonts.inter(color: const Color(0xFF617589)),
+            ),
+          );
+        }
+
+        return Column(
+          children: tasksVM.tasksByCategory.entries
+              .map((entry) => _buildSectionItem(
+                    category: entry.key,
+                    tasks: entry.value,
+                  ))
+              .toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionItem({
+    required String category,
+    required List<Map<String, dynamic>> tasks,
+  }) {
+    // Get the earliest due date
+    DateTime? earliestDate;
+    for (final task in tasks) {
+      final dueDate = task['due_date'];
+      if (dueDate != null) {
+        final parsed = DateTime.tryParse(dueDate.toString());
+        if (parsed != null) {
+          if (earliestDate == null || parsed.isBefore(earliestDate)) {
+            earliestDate = parsed;
+          }
+        }
+      }
+    }
+
+    // Get first assigned member
+    final firstTask = tasks.isNotEmpty ? tasks[0] : null;
+    final assignedMember = firstTask?['assigned_to'] ?? 'Unassigned';
+
+    // Format date for display
+    String dateDisplay = '';
+    if (earliestDate != null) {
+      dateDisplay = '${earliestDate.month}/${earliestDate.day}';
+    }
+
+    // Determine if section is locked (all tasks incomplete)
+    final allIncomplete = tasks.every((task) => task['status'] != 'completed');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF3F4F6)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.category_outlined,
+              color: allIncomplete ? const Color(0xFF137FEC) : Colors.grey,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  category,
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: allIncomplete ? Colors.black : Colors.grey,
+                  ),
+                ),
+                Text(
+                  "${tasks.length} task${tasks.length != 1 ? 's' : ''} • $assignedMember",
+                  style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (dateDisplay.isNotEmpty)
+                Text(
+                  dateDisplay,
+                  style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
+                ),
+              Icon(
+                Icons.chevron_right,
+                size: 16,
+                color: Colors.grey,
+              ),
+            ],
+          )
         ],
       ),
     );
@@ -151,89 +284,93 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> {
   }
 
   Widget _buildFinancialHealthCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF3F4F6)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Consumer<FinancialViewModel>(
+      builder: (context, financialVM, _) {
+        final projectBudget = (widget.project?['budget'] as num?)?.toDouble() ?? 0.0;
+        final projectName = widget.project?['name'] ?? 'Project';
+        
+        // Calculate budget utilized from transactions related to this project
+        double budgetUtilized = 0.0;
+        for (final transaction in financialVM.transactions) {
+          final title = (transaction['title'] ?? '').toString().toLowerCase();
+          if (title.contains(projectName.toLowerCase()) && 
+              (transaction['transaction_type'] ?? '').toString().toLowerCase() == 'expense') {
+            final amount = (transaction['amount'] as num?)?.toDouble() ?? 0.0;
+            budgetUtilized += amount;
+          }
+        }
+        
+        final utilizationPercent = projectBudget > 0 ? (budgetUtilized / projectBudget) : 0.0;
+        final estimatedTotal = budgetUtilized > 0 ? (budgetUtilized / (utilizationPercent > 0 ? utilizationPercent : 1.0)) : projectBudget;
+        final isOnTrack = utilizationPercent <= 0.75;
+        
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFF3F4F6)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF137FEC), size: 20),
-                  const SizedBox(width: 8),
-                  Text("Financial Status", style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Row(
+                    children: [
+                      const Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF137FEC), size: 20),
+                      const SizedBox(width: 8),
+                      Text("Financial Status", style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isOnTrack ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      isOnTrack ? "On Track" : "At Risk",
+                      style: GoogleFonts.inter(
+                        color: isOnTrack ? Colors.green : Colors.red,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  )
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(20)),
-                child: Text("On Track", style: GoogleFonts.inter(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
-              )
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Budget Utilized", style: GoogleFonts.inter(color: const Color(0xFF617589))),
+                  Text(
+                    "₱${budgetUtilized.toStringAsFixed(2)} / ₱${projectBudget.toStringAsFixed(2)}",
+                    style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: LinearProgressIndicator(
+                  value: utilizationPercent.clamp(0.0, 1.0),
+                  minHeight: 10,
+                  backgroundColor: const Color(0xFFF3F4F6),
+                  color: isOnTrack ? const Color(0xFF137FEC) : Colors.red,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                "Estimated completion cost: ₱${estimatedTotal.toStringAsFixed(2)}",
+                style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF9CA3AF)),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text("Budget Utilized", style: GoogleFonts.inter(color: const Color(0xFF617589))),
-              Text("P12,500 / P20,000", style: GoogleFonts.inter(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: const LinearProgressIndicator(
-              value: 0.625,
-              minHeight: 10,
-              backgroundColor: Color(0xFFF3F4F6),
-              color: Color(0xFF137FEC),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text("Estimated completion cost: P18,200", style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF9CA3AF))),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMilestoneItem({required String title, required String subtitle, required String date, required IconData icon, required bool isLocked}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFF3F4F6))),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(8)),
-            child: Icon(icon, color: isLocked ? Colors.grey : const Color(0xFF137FEC), size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14, color: isLocked ? Colors.grey : Colors.black)),
-                Text(subtitle, style: GoogleFonts.inter(fontSize: 12, color: Colors.grey)),
-              ],
-            ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(date, style: GoogleFonts.inter(fontSize: 12, color: Colors.grey)),
-              Icon(isLocked ? Icons.lock_outline : Icons.chevron_right, size: 16, color: Colors.grey),
-            ],
-          )
-        ],
-      ),
+        );
+      },
     );
   }
 
