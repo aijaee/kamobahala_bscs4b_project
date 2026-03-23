@@ -29,17 +29,23 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
       _totalIncome = 0;
       _totalExpenses = 0;
 
-      // Calculate income and expenses
+      // Calculate income and expenses (exclude budget allocations which are internal transfers)
       for (final transaction in transactions) {
-        final signedAmount = getSignedAmount(transaction);
-        if (signedAmount > 0) {
-          _totalIncome += signedAmount;
-        } else {
-          _totalExpenses += signedAmount.abs();
+        final title = (transaction['title'] ?? '').toString();
+        final isInternalTransfer = title.contains('Budget Allocation') || 
+                                  title.contains('Budget Adjustment');
+        
+        if (!isInternalTransfer) {
+          final signedAmount = getSignedAmount(transaction);
+          if (signedAmount > 0) {
+            _totalIncome += signedAmount;
+          } else {
+            _totalExpenses += signedAmount.abs();
+          }
         }
       }
 
-      // Calculate current balance
+      // Calculate current balance: opening balance + income - expenses
       _currentBalance = openingBalance + _totalIncome - _totalExpenses;
       notifyListeners();
     } catch (e) {

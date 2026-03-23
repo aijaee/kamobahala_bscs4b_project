@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'projects_list.dart';
 import '../../viewmodels/projects_viewmodel.dart';
+import '../../viewmodels/financial_viewmodel.dart';
 
 // ── Brand constants (shared with CreateOrganizationScreen) ───────────────────
 const kPrimary = Color(0xFF1A73E8);
@@ -115,6 +116,54 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   String _formatDate(DateTime? date) {
     if (date == null) return "Select...";
     return "${_monthAbbr(date.month)} ${date.day}, ${date.year}";
+  }
+
+  /// Calculate the actual depository balance: budget + income - expenses
+  double _calculateDepositoryBalance() {
+    try {
+      final financialViewModel = Provider.of<FinancialViewModel>(context, listen: false);
+      final budget = _toDouble(widget.organization['budget']);
+      double totalIncome = 0;
+      double totalExpenses = 0;
+
+      // Calculate income and expenses from transactions
+      for (final transaction in financialViewModel.transactions) {
+        final title = (transaction['title'] ?? '').toString();
+        final isInternalTransfer = title.contains('Budget Allocation') || 
+                                  title.contains('Budget Adjustment');
+        
+        if (!isInternalTransfer) {
+          final signedAmount = _getSignedAmount(transaction);
+          if (signedAmount > 0) {
+            totalIncome += signedAmount;
+          } else {
+            totalExpenses += signedAmount.abs();
+          }
+        }
+      }
+
+      return budget + totalIncome - totalExpenses;
+    } catch (e) {
+      // Fallback to just the budget if there's an error
+      return _toDouble(widget.organization['budget']);
+    }
+  }
+
+  /// Get signed amount for a transaction (positive for income, negative for expense)
+  double _getSignedAmount(Map<String, dynamic> transaction) {
+    final amount = _toDouble(transaction['amount']).abs();
+    final type = (transaction['transaction_type'] ?? 'expense').toString().toLowerCase();
+    return type == 'income' ? amount : -amount;
+  }
+
+  double _toDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value) ?? 0;
+    }
+    return 0;
   }
 
   String _monthAbbr(int month) {
@@ -465,22 +514,27 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           Divider(color: kBorder, height: 1),
           const SizedBox(height: 10),
 
-          // Central Depository Balance row
+          // Organization Depository Balance row
           Text(
-            "Central Depository Balance",
+            "${widget.organization['name'] ?? 'Organization'} Total Depository Balance",
             style: GoogleFonts.inter(
               fontSize: 12,
               color: kTextSecondary,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            "₱${widget.organization['budget']?.toString() ?? '0.00'}",
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: kTextPrimary,
-            ),
+          Consumer<FinancialViewModel>(
+            builder: (context, financialViewModel, _) {
+              final balance = _calculateDepositoryBalance();
+              return Text(
+                "₱${balance.toStringAsFixed(2)}",
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: kTextPrimary,
+                ),
+              );
+            },
           ),
           const SizedBox(height: 10),
 

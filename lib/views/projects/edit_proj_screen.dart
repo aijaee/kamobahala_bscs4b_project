@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'projects_list.dart';
 import '../../viewmodels/projects_viewmodel.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 
 // ── Brand constants (shared with CreateOrganizationScreen) ───────────────────
 const kPrimary = Color(0xFF1A73E8);
@@ -265,6 +266,35 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                     ),
 
                     const SizedBox(height: 16),
+
+                    // ── Delete Project Button ────────────────────────────────────
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kRed,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                        ),
+                        onPressed: viewModel.isLoading
+                            ? null
+                            : () => _handleDeleteProject(context, viewModel),
+                        child: Text(
+                          viewModel.isLoading ? "Deleting..." : "Delete Project",
+                          style: GoogleFonts.inter(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
@@ -304,6 +334,83 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
         SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to update project')),
       );
     }
+  }
+
+  Future<void> _handleDeleteProject(BuildContext context, ProjectsViewModel viewModel) async {
+    // Show confirmation dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          backgroundColor: kCardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Text(
+            'Delete Project?',
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: kTextPrimary,
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to delete this project? This action cannot be undone.',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: kTextSecondary,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: kPrimary,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kRed,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                
+                final success = await viewModel.deleteProject(widget.projectId);
+
+                if (success && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Project deleted successfully')),
+                  );
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization),
+                    ),
+                  );
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to delete project')),
+                  );
+                }
+              },
+              child: Text(
+                'Delete',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // ── Project Timeline Card ────────────────────────────────────────────────────
