@@ -6,9 +6,11 @@ import '../dashboard/organization_dashboard.dart';
 import '../../viewmodels/financial_viewmodel.dart';
 import '../../viewmodels/organization_dashboard_viewmodel.dart';
 import '../../viewmodels/projects_viewmodel.dart';
+import '../../core/services/admin_service.dart';
 import '../dashboard/financial_ledger.dart';
 import 'new_proj_screen.dart';
 import 'project_overview.dart';
+import 'edit_proj_screen.dart';
 
 class ProjectsList extends StatefulWidget {
   final int initialIndex;
@@ -20,43 +22,81 @@ class ProjectsList extends StatefulWidget {
   State<ProjectsList> createState() => _ProjectsListState();
 }
 
-class _ProjectsListState extends State<ProjectsList> {
+class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver {
   late int currentIndex;
   int selectedTab = 0;
+  bool _isAdmin = false;
   late FinancialViewModel _financialViewModel;
   late OrganizationDashboardViewModel _dashboardViewModel;
+  final AdminService _adminService = AdminService();
   double _balance = 0;
   String _searchQuery = "";
-
-  final List<String> tabs = [
-    "All Projects",
-    "Marketing",
-    "Product Launch",
-    "IT"
-  ];
+  late List<String> tabs;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     currentIndex = widget.initialIndex;
-    _financialViewModel = FinancialViewModel();
+    _financialViewModel = context.read<FinancialViewModel>();
     _dashboardViewModel = OrganizationDashboardViewModel(
       financialViewModel: _financialViewModel,
     );
     _fetchBalance();
-    
-    // Initialize projects in ViewModel
+    _checkAdminStatus();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        context.read<ProjectsViewModel>().fetchProjects(widget.organization['id'].toString());
+        context.read<ProjectsViewModel>().fetchProjectsWithProgress(widget.organization['id'].toString());
         context.read<ProjectsViewModel>().fetchCompletedProjects();
+        _buildTabsFromProjects();
+      }
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _fetchBalance();
+      _refreshProjectsWithProgress();
+    }
+  }
+
+  Future<void> _refreshProjectsWithProgress() async {
+    if (mounted) {
+      await context.read<ProjectsViewModel>().fetchProjectsWithProgress(widget.organization['id'].toString());
+      _buildTabsFromProjects();
+    }
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final isAdmin = await _adminService.isUserAdmin(widget.organization['id']);
+    setState(() => _isAdmin = isAdmin);
+  }
+
+  void _buildTabsFromProjects() {
+    final projectsViewModel = context.read<ProjectsViewModel>();
+    final uniqueDepartments = <String>{};
+    
+    for (var project in projectsViewModel.projects) {
+      final department = project['department'] as String?;
+      if (department != null && department.isNotEmpty) {
+        uniqueDepartments.add(department);
+      }
+    }
+
+    setState(() {
+      tabs = ['All Projects', ...uniqueDepartments.toList()];
+      // Reset selectedTab if it's out of bounds
+      if (selectedTab >= tabs.length) {
+        selectedTab = 0;
       }
     });
   }
 
   @override
   void dispose() {
-    _financialViewModel.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     _dashboardViewModel.dispose();
     super.dispose();
   }
@@ -88,14 +128,12 @@ class _ProjectsListState extends State<ProjectsList> {
   List<Map<String, dynamic>> _getFilteredProjects(
       List<Map<String, dynamic>> projects) {
     return projects.where((project) {
-      // Filter by search query
       final matchesSearch = _searchQuery.isEmpty ||
           project['name']
               .toString()
               .toLowerCase()
               .contains(_searchQuery.toLowerCase());
 
-      // Filter by selected tab
       final matchesTab = selectedTab == 0 ||
           project['department'] == tabs[selectedTab];
 
@@ -107,7 +145,6 @@ class _ProjectsListState extends State<ProjectsList> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F8),
-
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF137FEC),
         onPressed: () {
@@ -141,7 +178,6 @@ class _ProjectsListState extends State<ProjectsList> {
                       initialIndex: 2, organization: widget.organization)),
             );
           } else if (idx == 3) {
-            // TODO: Navigate to profile screen when ProfileScreen is implemented
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text("Profile screen coming soon..."),
@@ -174,93 +210,110 @@ class _ProjectsListState extends State<ProjectsList> {
       ),
       body: Consumer<ProjectsViewModel>(
         builder: (context, projectsViewModel, _) {
-          return SafeArea(
-            child: Column(
-              children: [
-                _header(),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                    children: [
-                      _buildFinancialCard(),
-                      const SizedBox(height: 20),
-                      _sectionHeader("Ongoing Projects", ""),
-                      const SizedBox(height: 12),
-                      // Dynamic data fetching with search and tab filtering
-                      if (projectsViewModel.isLoading)
-                        const Center(child: CircularProgressIndicator())
-                      else if (_getFilteredProjects(projectsViewModel.projects).isEmpty)
-                        const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(20.0),
-                            child: Text("No projects found."),
-                          ),
-                        )
-                      else
-                        ..._getFilteredProjects(projectsViewModel.projects)
-                            .asMap()
-                            .entries
-                            .map((entry) {
-                          final project = entry.value;
-                          final isLast = entry.key == _getFilteredProjects(projectsViewModel.projects).length - 1;
-                          double progress = 0.0;
-                          String budget = project['budget'] != null
-                              ? "₱${project['budget']}"
-                              : "₱0";
-
-                          return Column(
-                            children: [
-                              _projectCard(
-                                tag: project['status'] ?? "Active",
-                                title: project['name'] ?? "Untitled Project",
-                                progress: progress,
-                                spent: "₱0",
-                                limit: budget,
-                                color: const Color(0xFF137FEC),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => ProjectOverviewScreen(
-                                        organization: widget.organization,
-                                        project: project,
-                                      ),
-                                    ),
-                                  );
-                                },
+          return Consumer<FinancialViewModel>(
+            builder: (context, financialViewModel, _) {
+              return SafeArea(
+                child: Column(
+                  children: [
+                    _header(),
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+                        children: [
+                          _buildFinancialCard(),
+                          const SizedBox(height: 20),
+                          _sectionHeader("Ongoing Projects", ""),
+                          const SizedBox(height: 12),
+                          if (projectsViewModel.isLoading)
+                            const Center(child: CircularProgressIndicator())
+                          else if (_getFilteredProjects(projectsViewModel.projects).isEmpty)
+                            const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(20.0),
+                                child: Text("No projects found."),
                               ),
-                              if (!isLast) const SizedBox(height: 12),
-                            ],
-                          );
-                        }).toList(),
-                      const SizedBox(height: 20),
-                      _sectionHeader("Completed", ""),
-                      const SizedBox(height: 12),
-                      ...projectsViewModel.completedProjects.isEmpty
-                          ? [
-                              const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.all(20.0),
-                                  child: Text("No completed projects yet."),
-                                ),
-                              )
-                            ]
-                          : projectsViewModel.completedProjects.map((project) {
-                              final budget = project['budget'] != null
-                                  ? "₱${project['budget']}"
-                                  : "₱0";
-                              return _completedCard(
-                                title: project['name'] ?? "Project",
-                                amount: budget,
-                                completedDate:
-                                    project['due_date'] ?? "Recently completed",
+                            )
+                          else
+                            ..._getFilteredProjects(projectsViewModel.projects)
+                                .asMap()
+                                .entries
+                                .map((entry) {
+                              final project = entry.value;
+                              final isLast = entry.key == _getFilteredProjects(projectsViewModel.projects).length - 1;
+                              final progress = (project['progress'] as num?)?.toDouble() ?? 0.0;
+
+                              double spent = 0.0;
+                              final projectId = project['id'];
+                              for (final transaction in financialViewModel.transactions) {
+                                if (transaction['project_id'] == projectId &&
+                                    (transaction['transaction_type'] ?? '').toString().toLowerCase() == 'expense' &&
+                                    (transaction['title'] ?? '').toString().startsWith('Task:')) {
+                                  spent += (transaction['amount'] as num?)?.toDouble() ?? 0.0;
+                                }
+                              }
+
+                              final projectBudget = (project['budget'] as num?)?.toDouble() ?? 0.0;
+                              String budget = projectBudget > 0 ? "₱${projectBudget.toStringAsFixed(2)}" : "₱0.00";
+                              String spentStr = spent > 0 ? "₱${spent.toStringAsFixed(2)}" : "₱0.00";
+
+                              return Column(
+                                children: [
+                                  _projectCard(
+                                    tag: project['status'] ?? "Active",
+                                    title: project['name'] ?? "Untitled Project",
+                                    progress: progress,
+                                    spent: spentStr,
+                                    limit: budget,
+                                    color: const Color(0xFF137FEC),
+                                    projectId: project['id'],
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => ProjectOverviewScreen(
+                                            organization: widget.organization,
+                                            project: project,
+                                          ),
+                                        ),
+                                      ).then((_) {
+                                        _refreshProjectsWithProgress();
+                                      });
+                                    },
+                                  ),
+                                  if (!isLast) const SizedBox(height: 12),
+                                ],
                               );
                             }).toList(),
-                    ],
-                  ),
-                )
-              ],
-            ),
+                          const SizedBox(height: 20),
+                          _sectionHeader("Completed", ""),
+                          const SizedBox(height: 12),
+                          ...projectsViewModel.completedProjects.isEmpty
+                              ? [
+                                  const Center(
+                                    child: Padding(
+                                      padding: EdgeInsets.all(20.0),
+                                      child: Text("No completed projects yet."),
+                                    ),
+                                  )
+                                ]
+                              : projectsViewModel.completedProjects.map((project) {
+                                  final budget = project['budget'] != null
+                                      ? "₱${project['budget']}"
+                                      : "₱0";
+                                  return _completedCard(
+                                    title: project['name'] ?? "Project",
+                                    amount: budget,
+                                    completedDate:
+                                        project['due_date'] ?? "Recently completed",
+                                  );
+                                }).toList(),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           );
         },
       ),
@@ -299,12 +352,8 @@ class _ProjectsListState extends State<ProjectsList> {
                       icon: const Icon(Icons.add_circle_outline))
                 ],
               ),
-
               const SizedBox(height: 8),
-
               TextField(
-                // TODO: Implement search functionality
-                // TODO: [MVVM] bind search input to ViewModel.searchQuery
                 onChanged: (value) {
                   setState(() {
                     _searchQuery = value;
@@ -319,9 +368,7 @@ class _ProjectsListState extends State<ProjectsList> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none)),
               ),
-
               const SizedBox(height: 10),
-              // Tab filters for project categories
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -397,7 +444,6 @@ class _ProjectsListState extends State<ProjectsList> {
             ],
           ),
           const SizedBox(height: 8),
-          // Displays actual balance data fetched from _fetchBalance()
           Text(
             _formatCurrency(_balance),
             style: GoogleFonts.inter(
@@ -461,6 +507,7 @@ class _ProjectsListState extends State<ProjectsList> {
       required String spent,
       required String limit,
       required Color color,
+      String? projectId,
       VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -486,7 +533,26 @@ class _ProjectsListState extends State<ProjectsList> {
                   label: Text(tag),
                   backgroundColor: color.withOpacity(.1),
                 ),
-                const Icon(Icons.chevron_right)
+                if (_isAdmin && projectId != null)
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: Color(0xFF137FEC), size: 20),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => EditProjectScreen(
+                            projectId: projectId,
+                            organization: widget.organization,
+                          ),
+                        ),
+                      ).then((_) {
+                        context.read<ProjectsViewModel>()
+                            .fetchProjects(widget.organization['id'].toString());
+                      });
+                    },
+                  )
+                else
+                  const Icon(Icons.chevron_right)
               ],
             ),
             const SizedBox(height: 8),

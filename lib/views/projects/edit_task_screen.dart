@@ -2,23 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kamobahala_bscs4b_project/viewmodels/tasks_viewmodel.dart';
+import 'package:kamobahala_bscs4b_project/viewmodels/financial_viewmodel.dart';
 import 'package:kamobahala_bscs4b_project/core/services/organization_service.dart';
 
-class NewTaskScreen extends StatefulWidget {
+class EditTaskScreen extends StatefulWidget {
+  final String taskId;
   final String projectId;
   final String organizationId;
+  final Map<String, dynamic> task;
 
-  const NewTaskScreen({
+  const EditTaskScreen({
     super.key,
+    required this.taskId,
     required this.projectId,
     required this.organizationId,
+    required this.task,
   });
 
   @override
-  State<NewTaskScreen> createState() => _NewTaskScreenState();
+  State<EditTaskScreen> createState() => _EditTaskScreenState();
 }
 
-class _NewTaskScreenState extends State<NewTaskScreen> {
+class _EditTaskScreenState extends State<EditTaskScreen> {
   bool _financialDetailsEnabled = true;
   bool _deductFromBudget = false;
   String _selectedPriority = "Low";
@@ -31,6 +36,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   // Selected values
   String? _selectedCategory;
   String? _selectedAssignee;
+  String? _selectedStatus = 'todo';
   String? _selectedExpenseCategory;
   DateTime? _selectedDueDate;
   List<String> _categories = [];
@@ -41,31 +47,34 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   @override
   void initState() {
     super.initState();
-    _taskNameController = TextEditingController();
-    _estimatedExpenseController = TextEditingController();
-    _noteController = TextEditingController();
+    _taskNameController = TextEditingController(text: widget.task['title'] ?? '');
+    _estimatedExpenseController = TextEditingController(
+        text: (widget.task['estimated_expense'] ?? 0.0).toString());
+    _noteController = TextEditingController(text: widget.task['notes'] ?? '');
+    
+    _selectedPriority = widget.task['priority'] ?? 'Low';
+    _selectedStatus = widget.task['status'] ?? 'todo';
+    _deductFromBudget = widget.task['deduct_from_budget'] ?? false;
+    _selectedCategory = widget.task['category'] ?? 'Uncategorized';
+    _selectedAssignee = widget.task['assigned_to'];
+    _selectedExpenseCategory = widget.task['expense_category'] ?? 'Transportation';
+    
+    if (widget.task['due_date'] != null) {
+      _selectedDueDate = DateTime.tryParse(widget.task['due_date'].toString());
+    }
+    
     _loadTeamData();
   }
 
   Future<void> _loadTeamData() async {
     try {
       final orgService = OrganizationService();
-      // Fetch team members for the organization
       final response = await orgService.getOrganizationMembers(widget.organizationId);
-      
-      // Fetch categories (you may need to add this to organization service)
       final categories = await orgService.getTaskCategories(widget.organizationId);
       
       setState(() {
         _teamMembers = response;
         _categories = categories.map((c) => c['name'] as String).toList();
-        if (_categories.isNotEmpty) {
-          _selectedCategory = _categories.first;
-          _selectedExpenseCategory = _categories.first;
-        }
-        if (_teamMembers.isNotEmpty) {
-          _selectedAssignee = _teamMembers.first['email'];
-        }
         _isLoadingData = false;
       });
     } catch (e) {
@@ -99,27 +108,95 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       'assigned_to': _selectedAssignee,
       'due_date': _selectedDueDate?.toIso8601String(),
       'notes': _noteController.text,
-      'status': 'todo',
-      'organization_id': widget.organizationId,
+      'status': _selectedStatus,
     };
 
     if (_financialDetailsEnabled) {
       taskData['estimated_expense'] = double.tryParse(_estimatedExpenseController.text) ?? 0.0;
-      taskData['expense_category'] = _selectedExpenseCategory ?? 'Uncategorized';
+      taskData['expense_category'] = _selectedExpenseCategory ?? 'Transportation';
       taskData['deduct_from_budget'] = _deductFromBudget;
     }
 
     if (!mounted) return;
 
     final viewModel = Provider.of<TasksViewModel>(context, listen: false);
-    final success = await viewModel.createTask(taskData);
+    final success = await viewModel.updateTask(widget.taskId, taskData);
 
     if (success && mounted) {
       Navigator.pop(context);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to create task')),
+        SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to update task')),
       );
+    }
+  }
+
+  /// Handle task deletion with confirmation dialog
+  Future<void> _handleDeleteTask(BuildContext context) async {
+    final taskTitle = widget.task['title'] ?? 'Untitled Task';
+    
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Delete Task'),
+          content: Text('Are you sure you want to delete "$taskTitle"? This action cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final taskId = widget.task['task_id'] ?? widget.task['id'];
+      
+      if (taskId == null || taskId.isEmpty) {
+        throw Exception('Invalid task ID');
+      }
+      
+      // Delete the task
+      final success = await Provider.of<TasksViewModel>(context, listen: false).deleteTask(taskId);
+      
+      if (!success) {
+        throw Exception('Failed to delete task from database');
+      }
+
+      if (mounted) {
+        // Refresh all related data to update all screens
+        // 1. Refresh tasks for the project (updates task list and project sections)
+        await Provider.of<TasksViewModel>(context, listen: false)
+            .fetchProjectTasks(widget.projectId);
+        
+        // 2. Refresh financial data (updates budget and balance)
+        await Provider.of<FinancialViewModel>(context, listen: false)
+            .fetchTransactions(widget.organizationId);
+
+        // Show success message and navigate back
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Task "$taskTitle" deleted successfully')),
+        );
+        
+        // Pop back to previous screen (will show updated data)
+        Navigator.pop(context, true); // Return true to signal that data was changed
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete task: $e')),
+        );
+      }
     }
   }
 
@@ -152,12 +229,13 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             _buildGeneralInfoCard(),
             _buildSectionHeader("PRIORITY & TIMELINE"),
             _buildPriorityTimelineCard(),
+            _buildSectionHeader("STATUS"),
+            _buildStatusCard(),
             _buildSectionHeader("FINANCIAL DETAILS", hasSwitch: true),
             if (_financialDetailsEnabled) _buildFinancialDetailsCard(),
             const SizedBox(height: 12),
             _buildNoteCard(),
             const SizedBox(height: 24),
-            _buildBudgetAlert(),
             const SizedBox(height: 40),
           ],
         ),
@@ -184,7 +262,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         ),
       ),
       title: Text(
-        "New Task",
+        "Edit Task",
         style: GoogleFonts.inter(
           color: Colors.black,
           fontWeight: FontWeight.bold,
@@ -194,12 +272,28 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       centerTitle: true,
       actions: [
         Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: Center(
+            child: GestureDetector(
+              onTap: () => _handleDeleteTask(context),
+              child: Text(
+                "Delete",
+                style: GoogleFonts.inter(
+                  color: const Color(0xFFEF4444),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ),
+        ),
+        Padding(
           padding: const EdgeInsets.only(right: 16),
           child: Center(
             child: GestureDetector(
               onTap: _saveTask,
               child: Text(
-                "Done",
+                "Save",
                 style: GoogleFonts.inter(
                   color: const Color(0xFF137FEC),
                   fontWeight: FontWeight.bold,
@@ -266,6 +360,38 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
     );
   }
 
+  Widget _buildStatusCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Text("Status", style: GoogleFonts.inter(fontSize: 15)),
+            const Spacer(),
+            DropdownButton<String>(
+              value: _selectedStatus,
+              items: const [
+                DropdownMenuItem(value: 'todo', child: Text('To Do')),
+                DropdownMenuItem(value: 'in_progress', child: Text('In Progress')),
+                DropdownMenuItem(value: 'completed', child: Text('Completed')),
+              ],
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _selectedStatus = value);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _showCategoryPicker() async {
     final selected = await showDialog<String>(
       context: context,
@@ -327,72 +453,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         }
         _selectedCategory = result;
       });
-      if (mounted) Navigator.pop(context);
-    }
-  }
-
-  Future<void> _showExpenseCategoryPicker() async {
-    final selected = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Expense Category'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ..._categories.map((cat) => ListTile(
-                title: Text(cat),
-                onTap: () => Navigator.pop(context, cat),
-              )),
-              ListTile(
-                title: const Text('+ New Category'),
-                onTap: () => _showNewExpenseCategoryDialog(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (selected != null) {
-      setState(() => _selectedExpenseCategory = selected);
-    }
-  }
-
-  Future<void> _showNewExpenseCategoryDialog() async {
-    final controller = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Expense Category'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'Category name'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Create'),
-          ),
-        ],
-      ),
-    );
-    
-    if (result != null && result.isNotEmpty) {
-      // Save to database
-      final orgService = OrganizationService();
-      await orgService.createTaskCategory(widget.organizationId, result);
-      
-      setState(() {
-        if (!_categories.contains(result)) {
-          _categories.add(result);
-        }
-        _selectedExpenseCategory = result;
-      });
-      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -497,6 +557,71 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
     }
   }
 
+  Future<void> _showExpenseCategoryPicker() async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Select Expense Category'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ..._categories.map((cat) => ListTile(
+                title: Text(cat),
+                onTap: () => Navigator.pop(context, cat),
+              )),
+              ListTile(
+                title: const Text('+ New Category'),
+                onTap: () => _showNewExpenseCategoryDialog(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected != null) {
+      setState(() => _selectedExpenseCategory = selected);
+    }
+  }
+
+  Future<void> _showNewExpenseCategoryDialog() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('New Expense Category'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(hintText: 'Category name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+    
+    if (result != null && result.isNotEmpty) {
+      // Save to database
+      final orgService = OrganizationService();
+      await orgService.createTaskCategory(widget.organizationId, result);
+      
+      setState(() {
+        if (!_categories.contains(result)) {
+          _categories.add(result);
+        }
+        _selectedExpenseCategory = result;
+      });
+      if (mounted) Navigator.pop(context);
+    }
+  }
+
   Widget _buildFinancialDetailsCard() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -506,35 +631,16 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       ),
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Text("Estimated Expense", style: GoogleFonts.inter(fontSize: 15)),
-                const Spacer(),
-                SizedBox(
-                  width: 150,
-                  child: TextField(
-                    controller: _estimatedExpenseController,
-                    textAlign: TextAlign.right,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      hintText: "0.00",
-                      hintStyle: GoogleFonts.inter(color: const Color(0xFFD1D5DB)),
-                      prefix: Text("₱ ", style: GoogleFonts.inter(fontSize: 15, color: Colors.black)),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          _buildTextField("Estimated Expense", controller: _estimatedExpenseController, isNumeric: true),
           const Divider(height: 1, indent: 16),
           GestureDetector(
             onTap: _showExpenseCategoryPicker,
-            child: _buildListTile("Category", _selectedExpenseCategory ?? "Uncategorized", true, valueColor: const Color(0xFF137FEC)),
+            child: _buildListTile(
+              "Category",
+              _selectedExpenseCategory ?? "Transportation",
+              true,
+              valueColor: const Color(0xFF137FEC),
+            ),
           ),
           const Divider(height: 1, indent: 16),
           Padding(
@@ -582,47 +688,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
           hintStyle: GoogleFonts.inter(color: const Color(0xFF9CA3AF)),
           border: InputBorder.none,
         ),
-      ),
-    );
-  }
-
-  Widget _buildBudgetAlert() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF137FEC).withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(Icons.info_outline, color: Color(0xFF137FEC), size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "Project Budget: P12,450.00 remaining",
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF137FEC),
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "This task will reduce the budget by the estimated amount if marked.",
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFF137FEC).withValues(alpha: 0.7),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }

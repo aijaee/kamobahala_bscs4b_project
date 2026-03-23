@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../core/services/project_service.dart';
+import '../core/services/task_service.dart';
 
 class ProjectsViewModel extends ChangeNotifier {
   final ProjectService _projectService = ProjectService();
+  final TaskService _taskService = TaskService();
 
   List<Map<String, dynamic>> _projects = [];
   List<Map<String, dynamic>> _completedProjects = [];
@@ -200,5 +202,38 @@ class ProjectsViewModel extends ChangeNotifier {
       _setLoading(false);
       return false;
     }
+  }
+
+  /// Calculates progress percentage for a project based on tasks
+  Future<double> getProjectProgress(String projectId) async {
+    try {
+      return await _taskService.calculateProjectProgress(projectId);
+    } catch (e) {
+      print('Error calculating project progress: $e');
+      return 0.0;
+    }
+  }
+
+  /// Fetches all projects with progress data
+  Future<List<Map<String, dynamic>>> fetchProjectsWithProgress(String orgId) async {
+    _setLoading(true);
+    _errorMessage = null;
+    _currentOrganizationId = orgId;
+
+    try {
+      _projects = await _projectService.fetchProjects(orgId);
+      
+      // Add progress to each project
+      for (var project in _projects) {
+        final progress = await getProjectProgress(project['id']);
+        project['progress'] = progress;
+      }
+      
+      _setLoading(false);
+    } catch (e) {
+      _errorMessage = 'Failed to fetch projects: ${e.toString()}';
+      _setLoading(false);
+    }
+    return _projects;
   }
 }

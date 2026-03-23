@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../viewmodels/financial_viewmodel.dart';
 import '../../viewmodels/organization_dashboard_viewmodel.dart';
 import 'organization_dashboard.dart';
@@ -24,7 +25,8 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   void initState() {
     super.initState();
     currentIndex = widget.initialIndex;
-    _viewModel = FinancialViewModel();
+    // Use the global FinancialViewModel from Provider
+    _viewModel = context.read<FinancialViewModel>();
     _dashboardViewModel = OrganizationDashboardViewModel(
       financialViewModel: _viewModel,
     );
@@ -35,7 +37,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   @override
   void dispose() {
     _viewModel.removeListener(_onViewModelChanged);
-    _viewModel.dispose();
+    // Note: Don't dispose of _viewModel since it's managed by Provider
     _dashboardViewModel.dispose();
     super.dispose();
   }
@@ -190,7 +192,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "TOTAL DEPOSITORY BALANCE",
+            "${widget.organization['name'] ?? 'ORGANIZATION'} TOTAL DEPOSITORY BALANCE".toUpperCase(),
             style: GoogleFonts.inter(
               color: Colors.white.withValues(alpha: 0.8),
               fontSize: 12,
