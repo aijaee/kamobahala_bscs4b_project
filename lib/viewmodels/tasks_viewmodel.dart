@@ -18,17 +18,26 @@ class TasksViewModel extends ChangeNotifier {
 
   /// Fetches all tasks for a specific project
   Future<void> fetchProjectTasks(String projectId) async {
+    // If switching to a different project, clear old tasks immediately
+    if (_currentProjectId != projectId) {
+      _tasks = [];
+      _tasksByCategory = {};
+      _currentProjectId = projectId;
+      notifyListeners(); // Notify immediately when clearing tasks
+    }
+
     _setLoading(true);
     _errorMessage = null;
-    _currentProjectId = projectId;
 
     try {
       _tasks = await _taskService.fetchProjectTasks(projectId);
       _tasksByCategory = await _taskService.fetchTasksByCategory(projectId);
       _setLoading(false);
+      notifyListeners(); // Ensure UI is updated after tasks are loaded
     } catch (e) {
       _errorMessage = 'Failed to fetch tasks: ${e.toString()}';
       _setLoading(false);
+      notifyListeners(); // Notify about error
     }
   }
 
@@ -96,10 +105,15 @@ class TasksViewModel extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      await _taskService.deleteTask(taskId);
+      final success = await _taskService.deleteTask(taskId);
+      
+      if (!success) {
+        throw Exception('Failed to delete task from database');
+      }
 
-      // Remove from local task list
-      _tasks.removeWhere((task) => task['id'] == taskId);
+      // Remove from local task list (handle both 'id' and 'task_id' fields)
+      _tasks.removeWhere((task) => 
+          task['id'] == taskId || task['task_id'] == taskId);
 
       // Refresh grouped tasks
       if (_currentProjectId != null) {
@@ -113,12 +127,22 @@ class TasksViewModel extends ChangeNotifier {
     } catch (e) {
       _errorMessage = 'Failed to delete task: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
       return false;
     }
   }
 
   void _setLoading(bool value) {
     _isLoading = value;
+    notifyListeners();
+  }
+
+  /// Clears all tasks and resets the current project ID
+  void clearTasks() {
+    _tasks = [];
+    _tasksByCategory = {};
+    _currentProjectId = null;
+    _errorMessage = null;
     notifyListeners();
   }
 

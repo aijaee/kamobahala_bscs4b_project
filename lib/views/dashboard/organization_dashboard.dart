@@ -16,7 +16,8 @@ class OrganizationDashboard extends StatefulWidget {
   State<OrganizationDashboard> createState() => _OrganizationDashboardState();
 }
 
-class _OrganizationDashboardState extends State<OrganizationDashboard> {
+class _OrganizationDashboardState extends State<OrganizationDashboard>
+    with WidgetsBindingObserver {
   // track bottom nav selection
   int currentIndex = 0;
   late FinancialViewModel _financialViewModel;
@@ -25,6 +26,38 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
   @override
   void initState() {
     super.initState();
+    _initializeViewModels();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didUpdateWidget(OrganizationDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If the organization changed, reinitialize and reload data
+    if (oldWidget.organization['id'] != widget.organization['id']) {
+      _cleanupViewModels();
+      _initializeViewModels();
+      _refreshProjects();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Refresh projects when app resumes (e.g., returning from task list)
+      _refreshProjects();
+      _loadBalance();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _cleanupViewModels();
+    super.dispose();
+  }
+
+  void _initializeViewModels() {
     _financialViewModel = FinancialViewModel();
     _dashboardViewModel = OrganizationDashboardViewModel(
       financialViewModel: _financialViewModel,
@@ -33,12 +66,10 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
     _financialViewModel.addListener(_onViewModelChanged);
   }
 
-  @override
-  void dispose() {
+  void _cleanupViewModels() {
     _financialViewModel.removeListener(_onViewModelChanged);
     _financialViewModel.dispose();
     _dashboardViewModel.dispose();
-    super.dispose();
   }
 
   void _onViewModelChanged() {
@@ -53,6 +84,17 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
       widget.organization,
       _financialViewModel.transactions,
     );
+  }
+
+  /// Refreshes projects for the current organization
+  void _refreshProjects() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<ProjectsViewModel>().fetchProjectsWithProgress(
+              widget.organization['id'].toString(),
+            );
+      }
+    });
   }
 
   @override
@@ -177,7 +219,10 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("TOTAL DEPOSITORY BALANCE", style: GoogleFonts.inter(color: Colors.white.withOpacity(0.8), fontSize: 12, letterSpacing: 0.6, fontWeight: FontWeight.w500)),
+              Text(
+                "${widget.organization['name'] ?? 'ORGANIZATION'} TOTAL DEPOSITORY BALANCE".toUpperCase(),
+                style: GoogleFonts.inter(color: Colors.white.withOpacity(0.8), fontSize: 12, letterSpacing: 0.6, fontWeight: FontWeight.w500),
+              ),
               const Icon(Icons.visibility_outlined, color: Colors.white, size: 18),
             ],
           ),
@@ -229,7 +274,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(title, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold)),
-        TextButton(onPressed: () {}, child: Text(actionText, style: const TextStyle(color: Color(0xFF137FEC)))),
+        TextButton(onPressed: onPressed, child: Text(actionText, style: const TextStyle(color: Color(0xFF137FEC)))),
       ],
     );
   }
@@ -267,20 +312,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
   }
 
   // TODO: [MVVM] move project list content into ViewModel and make this data-driven
-  Widget _buildProjectsList() {
-    return SizedBox(
-      height: 180,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        children: [
-          _buildProjectCard("CS Gala", "Q3 Product Revamp", 0.85, "12 Days Left", const Color(0xFF137FEC)),
-          const SizedBox(width: 16),
-          _buildProjectCard("Global Retail", "Expansion Phase 1", 0.40, "45 Days Left", Colors.green),
-        ],
-      ),
-    );
-  }
-
   Widget _buildProjectsListFromViewModel(BuildContext context) {
     return Consumer<ProjectsViewModel>(
       builder: (context, projectsViewModel, _) {
@@ -289,7 +320,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
             projectsViewModel.currentOrganizationId !=
                 widget.organization['id'].toString()) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            projectsViewModel.fetchProjects(
+            projectsViewModel.fetchProjectsWithProgress(
                 widget.organization['id'].toString());
           });
         }
@@ -317,6 +348,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
             itemCount: projectsViewModel.projects.length,
             itemBuilder: (context, index) {
               final project = projectsViewModel.projects[index];
+              final progress = (project['progress'] as num?)?.toDouble() ?? 0.0;
+              
               return Padding(
                 padding: EdgeInsets.only(
                   left: index == 0 ? 0 : 16,
@@ -325,7 +358,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard> {
                 child: _buildProjectCard(
                   project['name'] ?? 'Untitled',
                   project['description'] ?? 'No description',
-                  0.0, // Progress not yet tracked
+                  progress,
                   'In Progress',
                   const Color(0xFF137FEC),
                   project: project,
