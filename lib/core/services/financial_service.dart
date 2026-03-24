@@ -32,4 +32,32 @@ class FinancialService {
 
     return response;
   }
+
+  /// Delete a transaction by its ID
+  Future<bool> deleteTransaction(String transactionId) async {
+    try {
+      await _client
+          .from('financial_transactions')
+          .delete()
+          .eq('id', transactionId);
+      return true;
+    } catch (e) {
+      print('Error deleting transaction: $e');
+      return false;
+    }
+  }
+
+  /// Delete all transactions associated with a task
+  Future<bool> deleteTaskTransactions(String taskId) async {
+    try {
+      await _client
+          .from('financial_transactions')
+          .delete()
+          .eq('task_id', taskId);
+      return true;
+    } catch (e) {
+      print('Error deleting task transactions: $e');
+      return false;
+    }
+  }
 }

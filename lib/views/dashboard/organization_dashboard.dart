@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../viewmodels/financial_viewmodel.dart';
 import '../../viewmodels/organization_dashboard_viewmodel.dart';
 import '../../viewmodels/projects_viewmodel.dart';
+import '../../core/services/organization_service.dart';
 import 'financial_ledger.dart';
 import '../projects/projects_list.dart';
 import '../projects/project_overview.dart';
@@ -22,6 +23,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   int currentIndex = 0;
   late FinancialViewModel _financialViewModel;
   late OrganizationDashboardViewModel _dashboardViewModel;
+  final OrganizationService _orgService = OrganizationService();
+  bool _balanceHidden = true;
 
   @override
   void initState() {
@@ -84,6 +87,9 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       widget.organization,
       _financialViewModel.transactions,
     );
+    
+    // Sync member names from profiles to ensure they're populated
+    await _orgService.syncMemberNamesFromProfiles(widget.organization['id'].toString());
   }
 
   /// Refreshes projects for the current organization
@@ -223,13 +229,24 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                 "${widget.organization['name'] ?? 'ORGANIZATION'} TOTAL DEPOSITORY BALANCE".toUpperCase(),
                 style: GoogleFonts.inter(color: Colors.white.withOpacity(0.8), fontSize: 12, letterSpacing: 0.6, fontWeight: FontWeight.w500),
               ),
-              const Icon(Icons.visibility_outlined, color: Colors.white, size: 18),
+              IconButton(
+                icon: Icon(
+                  _balanceHidden ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _balanceHidden = !_balanceHidden;
+                  });
+                },
+              ),
             ],
           ),
           const SizedBox(height: 8),
           // Bind balance from ViewModel
           Text(
-            _formatCurrency(_dashboardViewModel.currentBalance),
+            _balanceHidden ? "••••••••" : _formatCurrency(_dashboardViewModel.currentBalance),
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 30,

@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'projects_list.dart';
 import '../../viewmodels/projects_viewmodel.dart';
-import '../../viewmodels/auth_viewmodel.dart';
 
 // ── Brand constants (shared with CreateOrganizationScreen) ───────────────────
 const kPrimary = Color(0xFF1A73E8);
@@ -282,7 +281,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                         ),
                         onPressed: viewModel.isLoading
                             ? null
-                            : () => _handleDeleteProject(context, viewModel),
+                            : () => _handleDeleteProject(viewModel),
                         child: Text(
                           viewModel.isLoading ? "Deleting..." : "Delete Project",
                           style: GoogleFonts.inter(
@@ -318,8 +317,9 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     };
 
     final success = await viewModel.updateProject(widget.projectId, updates);
+    if (!mounted) return;
 
-    if (success && mounted) {
+    if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Project updated successfully')),
       );
@@ -329,15 +329,16 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
           builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization),
         ),
       );
-    } else if (mounted) {
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to update project')),
       );
     }
   }
 
-  Future<void> _handleDeleteProject(BuildContext context, ProjectsViewModel viewModel) async {
+  Future<void> _handleDeleteProject(ProjectsViewModel viewModel) async {
     // Show confirmation dialog
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -379,10 +380,10 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
               ),
               onPressed: () async {
                 Navigator.of(dialogContext).pop();
-                
                 final success = await viewModel.deleteProject(widget.projectId);
+                if (!mounted) return;
 
-                if (success && mounted) {
+                if (success) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Project deleted successfully')),
                   );
@@ -392,7 +393,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                       builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization),
                     ),
                   );
-                } else if (mounted) {
+                } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to delete project')),
                   );
@@ -528,7 +529,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: kPrimary.withOpacity(0.1),
+                  color: kPrimary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(

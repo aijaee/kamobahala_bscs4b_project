@@ -99,6 +99,24 @@ class _TaskListScreenState extends State<TaskListScreen> {
               .fetchProjectTasks(widget.projectId);
         }
       }
+    } else {
+      // If unchecking (marking as not completed), delete associated financial transactions
+      try {
+        final success = await _financialService.deleteTaskTransactions(taskId);
+        if (success && mounted) {
+          // Refresh both task list and financial data after deletion
+          Provider.of<TasksViewModel>(context, listen: false)
+              .fetchProjectTasks(widget.projectId);
+          Provider.of<FinancialViewModel>(context, listen: false)
+              .fetchTransactions(widget.organizationId);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Note: Task status updated, but could not remove financial detail: $e')),
+          );
+        }
+      }
     }
   }
 
@@ -203,24 +221,26 @@ class _TaskListScreenState extends State<TaskListScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF137FEC),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => NewTaskScreen(
-                projectId: widget.projectId,
-                organizationId: widget.organizationId,
-              ),
-            ),
-          ).then((_) {
-            Provider.of<TasksViewModel>(context, listen: false)
-                .fetchProjectTasks(widget.projectId);
-          });
-        },
-        child: const Icon(Icons.add, color: Colors.white, size: 28),
-      ),
+      floatingActionButton: _isAdmin
+          ? FloatingActionButton(
+              backgroundColor: const Color(0xFF137FEC),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => NewTaskScreen(
+                      projectId: widget.projectId,
+                      organizationId: widget.organizationId,
+                    ),
+                  ),
+                ).then((_) {
+                  Provider.of<TasksViewModel>(context, listen: false)
+                      .fetchProjectTasks(widget.projectId);
+                });
+              },
+              child: const Icon(Icons.add, color: Colors.white, size: 28),
+            )
+          : null,
       bottomNavigationBar: _buildBottomNav(context),
     );
   }
@@ -346,14 +366,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
               )
             : _buildBadge(priority, _getPriorityColor(priority)),
         onTap: () {
-          if (!_isAdmin) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => TaskDetailsScreen(task: task),
-              ),
-            );
-          }
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TaskDetailsScreen(task: task),
+            ),
+          );
         },
       ),
     );

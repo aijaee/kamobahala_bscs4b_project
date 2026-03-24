@@ -8,6 +8,7 @@ import 'task_list_screen.dart';
 import 'edit_proj_screen.dart';
 import '../../viewmodels/tasks_viewmodel.dart';
 import '../../viewmodels/financial_viewmodel.dart';
+import '../../core/services/admin_service.dart';
 
 class ProjectOverviewScreen extends StatefulWidget {
   final Map<String, dynamic> organization;
@@ -29,12 +30,22 @@ class ProjectOverviewScreen extends StatefulWidget {
 
 class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with WidgetsBindingObserver {
   int _selectedIndex = 1;
+  bool _isAdmin = false;
+  final AdminService _adminService = AdminService();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadProjectData();
+    _checkAdminStatus();
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final isAdmin = await _adminService.isUserAdmin(widget.organization['id']);
+    if (mounted) {
+      setState(() => _isAdmin = isAdmin);
+    }
   }
 
   void _loadProjectData() {
@@ -253,25 +264,26 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
       ),
       centerTitle: true,
       actions: [
-        IconButton(
-          icon: const Icon(Icons.edit, color: Colors.black),
-          onPressed: () {
-            if (widget.project != null && widget.project!['id'] != null) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => EditProjectScreen(
-                    projectId: widget.project!['id'],
-                    organization: widget.organization,
+        if (_isAdmin)
+          IconButton(
+            icon: const Icon(Icons.edit, color: Colors.black),
+            onPressed: () {
+              if (widget.project != null && widget.project!['id'] != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EditProjectScreen(
+                      projectId: widget.project!['id'],
+                      organization: widget.organization,
+                    ),
                   ),
-                ),
-              ).then((_) {
-                // Refresh project data when returning from edit
-                _loadProjectData();
-              });
-            }
-          },
-        ),
+                ).then((_) {
+                  // Refresh project data when returning from edit
+                  _loadProjectData();
+                });
+              }
+            },
+          ),
       ],
     );
   }

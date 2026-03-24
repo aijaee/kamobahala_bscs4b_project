@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'edit_task_screen.dart';
+import '../../core/services/admin_service.dart';
+import '../../core/services/task_service.dart';
+import '../../core/services/organization_service.dart';
 
 class TaskDetailsScreen extends StatefulWidget {
-  final Map<String, dynamic> task; // FIXED: Explicit Map for [] operator
+  final Map<String, dynamic> task;
 
   const TaskDetailsScreen({super.key, required this.task});
 
@@ -13,14 +16,28 @@ class TaskDetailsScreen extends StatefulWidget {
 
 class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   late String _currentStatus;
+  bool _isAdmin = false;
+  final AdminService _adminService = AdminService();
+  final TaskService _taskService = TaskService();
+  final OrganizationService _orgService = OrganizationService();
 
   @override
   void initState() {
     super.initState();
-    // FIXED: Align with your SQL check constraint
     _currentStatus = widget.task['status'] == 'Todo'
         ? 'To Do'
         : (widget.task['status'] ?? 'To Do');
+    _checkAdminStatus();
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final organizationId = widget.task['organization_id'];
+    if (organizationId != null) {
+      final isAdmin = await _adminService.isUserAdmin(organizationId);
+      if (mounted) {
+        setState(() => _isAdmin = isAdmin);
+      }
+    }
   }
 
   @override
@@ -110,11 +127,17 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                 const Color(0xFF617589),
               ),
               const SizedBox(width: 16),
-              _buildGridItem(
-                Icons.person,
-                "Assigned To",
-                widget.task['assigned_to'] ?? 'Unassigned',
-                const Color(0xFF617589),
+              FutureBuilder<String>(
+                future: _getAssigneeDisplayName(),
+                builder: (context, snapshot) {
+                  final displayName = snapshot.data ?? widget.task['assignee'] ?? 'Unassigned';
+                  return _buildGridItem(
+                    Icons.person,
+                    "Assigned To",
+                    displayName,
+                    const Color(0xFF617589),
+                  );
+                },
               ),
             ],
           ),
@@ -131,6 +154,30 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     } catch (e) {
       return dateString;
     }
+  }
+
+  Future<String> _getAssigneeDisplayName() async {
+    if (widget.task['assignee'] != null) {
+      final assigneeEmail = widget.task['assignee'].toString();
+      try {
+        final organizationId = widget.task['organization_id'];
+        if (organizationId == null) return assigneeEmail;
+        
+        final members = await _orgService.getOrganizationMembers(organizationId);
+        final member = members.firstWhere(
+          (m) => m['email'] == assigneeEmail,
+          orElse: () => {},
+        );
+        
+        if (member.isNotEmpty && member['name'] != null) {
+          return member['name'].toString();
+        }
+      } catch (e) {
+        // Continue with email fallback
+      }
+      return assigneeEmail;
+    }
+    return 'Unassigned';
   }
 
   Widget _buildGridItem(
@@ -239,7 +286,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                 ),
               ),
               Text(
-                '\$${estimatedExpense.toStringAsFixed(2)}',
+                '₱${estimatedExpense.toStringAsFixed(2)}',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
@@ -326,34 +373,35 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       ),
       centerTitle: true,
       actions: [
-        IconButton(
-          icon: const Icon(Icons.edit, color: Colors.white, size: 20),
-          onPressed: () {
-            final projectId = widget.task['project_id'];
-            final organizationId = widget.task['organization_id'];
-            final taskId = widget.task['id'];
-            
-            if (projectId != null && organizationId != null && taskId != null) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => EditTaskScreen(
-                    taskId: taskId,
-                    projectId: projectId,
-                    organizationId: organizationId,
-                    task: widget.task,
+        if (_isAdmin)
+          IconButton(
+            icon: const Icon(Icons.edit, color: Colors.white, size: 20),
+            onPressed: () {
+              final projectId = widget.task['project_id'];
+              final organizationId = widget.task['organization_id'];
+              final taskId = widget.task['id'];
+              
+              if (projectId != null && organizationId != null && taskId != null) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => EditTaskScreen(
+                      taskId: taskId,
+                      projectId: projectId,
+                      organizationId: organizationId,
+                      task: widget.task,
+                    ),
                   ),
-                ),
-              ).then((_) {
-                Navigator.pop(context);
-              });
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Unable to edit task - missing information')),
-              );
-            }
-          },
-        ),
+                ).then((_) {
+                  Navigator.pop(context);
+                });
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Unable to edit task - missing information')),
+                );
+              }
+            },
+          ),
       ],
     );
   }
