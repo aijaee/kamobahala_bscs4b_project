@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodels/financial_viewmodel.dart';
 import '../../viewmodels/organization_dashboard_viewmodel.dart';
+import '../../core/services/admin_service.dart';
 import 'organization_dashboard.dart';
 import '../projects/projects_list.dart';
 
@@ -20,6 +21,9 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   late int currentIndex;
   late FinancialViewModel _viewModel;
   late OrganizationDashboardViewModel _dashboardViewModel;
+  bool _isAdmin = false;
+  final AdminService _adminService = AdminService();
+  bool _balanceHidden = true;
 
   @override
   void initState() {
@@ -31,7 +35,15 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
       financialViewModel: _viewModel,
     );
     _fetchTransactions();
+    _checkAdminStatus();
     _viewModel.addListener(_onViewModelChanged);
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final isAdmin = await _adminService.isUserAdmin(widget.organization['id']);
+    if (mounted) {
+      setState(() => _isAdmin = isAdmin);
+    }
   }
 
   @override
@@ -191,18 +203,35 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "${widget.organization['name'] ?? 'ORGANIZATION'} TOTAL DEPOSITORY BALANCE".toUpperCase(),
-            style: GoogleFonts.inter(
-              color: Colors.white.withValues(alpha: 0.8),
-              fontSize: 12,
-              letterSpacing: 0.7,
-              fontWeight: FontWeight.w500,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "${widget.organization['name'] ?? 'ORGANIZATION'} TOTAL DEPOSITORY BALANCE".toUpperCase(),
+                style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 12,
+                  letterSpacing: 0.7,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  _balanceHidden ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _balanceHidden = !_balanceHidden;
+                  });
+                },
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(
-            _formatCurrency(_dashboardViewModel.currentBalance),
+            _balanceHidden ? "••••••••" : _formatCurrency(_dashboardViewModel.currentBalance),
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 36,
@@ -284,7 +313,11 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
         ? transaction['description'].toString()
         : (amount > 0 ? 'Incoming funds' : 'Expense recorded');
     final deptColor = _departmentColor(department);
-    bool isIncome = amount > 0;
+    final title = transaction['title']?.toString() ?? 'Untitled transaction';
+    
+    // Check if this is a budget allocation
+    final isBudgetAllocation = title.contains('Budget Allocation') || title.contains('Budget Adjustment');
+    bool isIncome = amount > 0 && !isBudgetAllocation;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -298,14 +331,18 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color:
-                  isIncome ? const Color(0x1A22C55E) : const Color(0x1A137FEC),
+              color: isBudgetAllocation
+                  ? const Color(0x1AF97316) // Orange background for budget allocations
+                  : (isIncome ? const Color(0x1A22C55E) : const Color(0x1A137FEC)),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
-              isIncome ? Icons.south_west : Icons.north_east,
-              color:
-                  isIncome ? const Color(0xFF16A34A) : const Color(0xFF137FEC),
+              isBudgetAllocation
+                  ? Icons.account_balance_wallet // Wallet icon for budget allocations
+                  : (isIncome ? Icons.south_west : Icons.north_east),
+              color: isBudgetAllocation
+                  ? const Color(0xFFF97316) // Orange color for budget allocations
+                  : (isIncome ? const Color(0xFF16A34A) : const Color(0xFF137FEC)),
             ),
           ),
           const SizedBox(width: 16),
@@ -313,7 +350,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(transaction['title']?.toString() ?? 'Untitled transaction',
+                Text(title,
                     style: GoogleFonts.inter(
                         fontWeight: FontWeight.bold, fontSize: 14)),
                 Text(description,
@@ -342,11 +379,15 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${isIncome ? '+' : '-'}${_formatCurrency(amount.abs())}',
+                isBudgetAllocation
+                    ? _formatCurrency(amount.abs())
+                    : '${isIncome ? '+' : '-'}${_formatCurrency(amount.abs())}',
                 style: GoogleFonts.inter(
-                  color: isIncome
-                      ? const Color(0xFF16A34A)
-                      : const Color(0xFFEF4444),
+                  color: isBudgetAllocation
+                      ? const Color(0xFFF97316) // Orange color for budget allocations
+                      : (isIncome
+                          ? const Color(0xFF16A34A)
+                          : const Color(0xFFEF4444)),
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),
@@ -362,15 +403,17 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   }
 
   Widget _buildFloatingActionButton() {
-    return Positioned(
-      right: 24,
-      bottom: 24,
-      child: FloatingActionButton(
-        backgroundColor: const Color(0xFF137FEC),
-        onPressed: _openCreateTransactionDialog,
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-    );
+    return _isAdmin
+        ? Positioned(
+            right: 24,
+            bottom: 24,
+            child: FloatingActionButton(
+              backgroundColor: const Color(0xFF137FEC),
+              onPressed: _openCreateTransactionDialog,
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
+          )
+        : const SizedBox.shrink();
   }
 
   Widget _buildEmptyState() {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/organization_service.dart';
+import '../../core/services/admin_service.dart';
 import 'main_dashboard_screen.dart';
 
 // Brand colors extracted from the "New Project" screen design
@@ -26,6 +27,7 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
   // TODO: [MVVM] move state and service into CreateOrganizationViewModel
   final _formKey = GlobalKey<FormState>();
   final OrganizationService _organizationService = OrganizationService();
+  final AdminService _adminService = AdminService();
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
@@ -408,7 +410,16 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
 
     // TODO: [MVVM] move service error handling and response logic into ViewModel
     try {
-      await _organizationService.createOrganization(data);
+      final newOrg = await _organizationService.createOrganization(data);
+
+      // Add members from the form
+      for (final member in members) {
+        final email = member['controller'].text.trim();
+        final role = member['role'] as String;
+        if (email.isNotEmpty) {
+          await _adminService.addMemberByEmail(newOrg['id'], email, role);
+        }
+      }
 
       if (!mounted) return;
 

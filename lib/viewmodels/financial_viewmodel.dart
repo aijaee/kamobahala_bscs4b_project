@@ -62,9 +62,11 @@ class FinancialViewModel extends ChangeNotifier {
       _transactions =
           await _financialService.fetchTransactions(organizationId);
       _setLoading(false);
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to fetch transactions: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
     }
   }
 
@@ -107,6 +109,12 @@ class FinancialViewModel extends ChangeNotifier {
   double getSignedAmount(Map<String, dynamic> transaction) {
     final amount = _toDouble(transaction['amount']).abs();
     final type = (transaction['transaction_type'] ?? 'expense').toString().toLowerCase();
+    final title = (transaction['title'] ?? '').toString();
+    
+    // Treat budget allocations as positive (they're internal transfers, not expenses)
+    if (title.contains('Budget Allocation') || title.contains('Budget Adjustment')) {
+      return amount;
+    }
 
     return type == 'income' ? amount : -amount;
   }

@@ -12,7 +12,6 @@ class DepositoryViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
 
-  /// Fetches all repositories
   Future<void> fetchRepositories() async {
     _setLoading(true);
     _errorMessage = null;
@@ -26,7 +25,6 @@ class DepositoryViewModel extends ChangeNotifier {
     }
   }
 
-  /// Creates a new repository config
   Future<bool> createRepository(Map<String, dynamic> data) async {
     _setLoading(true);
     _errorMessage = null;
@@ -45,7 +43,6 @@ class DepositoryViewModel extends ChangeNotifier {
     }
   }
 
-  /// Updates an existing repository
   Future<bool> updateRepository(
       String id, Map<String, dynamic> data) async {
     _setLoading(true);
@@ -53,8 +50,6 @@ class DepositoryViewModel extends ChangeNotifier {
 
     try {
       await _depositoryService.updateRepository(id, data);
-      
-      // Update local repository list
       final index = _repositories.indexWhere((r) => r['id'] == id);
       if (index != -1) {
         _repositories[index] = {..._repositories[index], ...data};
@@ -70,15 +65,12 @@ class DepositoryViewModel extends ChangeNotifier {
     }
   }
 
-  /// Deletes a repository config
   Future<bool> deleteRepository(String id) async {
     _setLoading(true);
     _errorMessage = null;
 
     try {
       await _depositoryService.deleteRepository(id);
-      
-      // Remove from local list
       _repositories.removeWhere((r) => r['id'] == id);
       
       _setLoading(false);

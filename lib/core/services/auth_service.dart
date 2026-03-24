@@ -43,12 +43,41 @@ class AuthService {
         }
       }
 
+      // Link user to any pending organization invites by email
+      await _linkToPendingOrganizations(response.user!.id, email);
+
       return response;
     } catch (e) {
       if (_client.auth.currentUser != null) {
         await _client.auth.signOut();
       }
       rethrow;
+    }
+  }
+
+  // Link a newly registered user to any pending organization_members entries that match their email
+  Future<void> _linkToPendingOrganizations(String userId, String email) async {
+    try {
+      // Fetch user's full_name from profiles table
+      final userProfile = await _client
+          .from('profiles')
+          .select('full_name')
+          .eq('email', email)
+          .maybeSingle();
+      
+      String? fullName = userProfile?['full_name'] as String?;
+
+      // Update all organization_members entries with this email to link them to the user and set name
+      await _client
+          .from('organization_members')
+          .update({
+            'user_id': userId,
+            'name': fullName,
+          })
+          .eq('email', email);
+    } catch (e) {
+      // Silently handle linking errors - user can still function without this
+      print('Error linking user to pending organizations: $e');
     }
   }
 
