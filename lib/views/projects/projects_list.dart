@@ -32,6 +32,7 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
   double _balance = 0;
   String _searchQuery = "";
   late List<String> tabs;
+  bool _balanceHidden = true;
 
   @override
   void initState() {
@@ -145,18 +146,20 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F8),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF137FEC),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => CreateProjectScreen(organization: widget.organization),
-            ),
-          );
-        },
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
+      floatingActionButton: _isAdmin
+          ? FloatingActionButton(
+              backgroundColor: const Color(0xFF137FEC),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CreateProjectScreen(organization: widget.organization),
+                  ),
+                );
+              },
+              child: const Icon(Icons.add, color: Colors.white),
+            )
+          : null,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
         selectedItemColor: const Color(0xFF137FEC),
@@ -439,13 +442,23 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const Icon(Icons.visibility_outlined,
-                  color: Colors.white, size: 18),
+              IconButton(
+                icon: Icon(
+                  _balanceHidden ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.white,
+                  size: 20,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _balanceHidden = !_balanceHidden;
+                  });
+                },
+              ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
-            _formatCurrency(_balance),
+            _balanceHidden ? "••••••••" : _formatCurrency(_balance),
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 30,

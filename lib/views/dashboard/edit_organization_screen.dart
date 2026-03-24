@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'main_dashboard_screen.dart';
+import '../../core/services/admin_service.dart';
+import '../../core/services/auth_service.dart';
 import '../../core/services/organization_service.dart';
 
 const kPrimary = Color(0xFF1A73E8);
@@ -24,6 +27,7 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
   // TODO: [MVVM] move organization state and service calls into EditOrganizationViewModel
   final _formKey = GlobalKey<FormState>();
   final OrganizationService _orgService = OrganizationService();
+  final AdminService _adminService = AdminService();
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
@@ -31,6 +35,8 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
 
   // TODO: [MVVM] manage members list in ViewModel instead of widget state when possible
   List<Map<String, dynamic>> members = [];
+  List<String> _existingMemberEmails = [];
+  bool _isAdmin = false;
 
   @override
   void initState() {
@@ -39,7 +45,42 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
     nameController.text = widget.organization['name'] ?? '';
     descriptionController.text = widget.organization['description'] ?? '';
     budgetController.text = (widget.organization['budget'] ?? 0.0).toString();
+    
+    _loadExistingMembers();
+    _checkAdminStatus();
+  }
 
+  Future<void> _checkAdminStatus() async {
+    final isAdmin = await _adminService.isUserAdmin(widget.organization['id']);
+    if (mounted) {
+      setState(() => _isAdmin = isAdmin);
+      if (!isAdmin) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Only admins can edit organization settings')),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadExistingMembers() async {
+    try {
+      final existingMembers =
+          await _adminService.getOrganizationMembers(widget.organization['id']);
+      
+      setState(() {
+        _existingMemberEmails =
+            existingMembers.map((m) => m['email'] as String).toList();
+        members = existingMembers.map((member) {
+          return {
+            'controller': TextEditingController(text: member['email'] as String),
+            'role': member['role'] as String,
+          };
+        }).toList();
+      });
+    } catch (e) {
+      print('Error loading members: $e');
+    }
   }
 
   InputDecoration _inputDecoration(String hint) {
@@ -163,7 +204,7 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
           Expanded(
             flex: 2,
             child: DropdownButtonFormField<String>(
-              initialValue: members[index]["role"],
+              initialValue: members[index]["role"] as String,
               style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
               dropdownColor: kCardBg,
               decoration: InputDecoration(
@@ -189,7 +230,9 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                 DropdownMenuItem(value: "Member", child: Text("Member")),
               ],
               onChanged: (value) {
-                setState(() => members[index]["role"] = value);
+                if (value != null) {
+                  setState(() => members[index]["role"] = value as Object);
+                }
               },
             ),
           ),
@@ -276,7 +319,7 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
                       members.add({
                         "controller": TextEditingController(),
                         "role": "Member",
-                      });
+                      } as Map<String, dynamic>);
                     });
                   },
                   icon: const Icon(Icons.add, size: 18, color: kPrimary),
@@ -330,7 +373,6 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
   }
 
   void _updateOrganization() async {
-    // Show loading indicator
     showDialog(
         context: context,
         barrierDismissible: false,
@@ -344,6 +386,47 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
 
     try {
       await _orgService.updateOrganization(widget.organization['id'], data);
+
+      final currentUserEmail = Supabase.instance.client.auth.currentUser?.email;
+
+      final newMemberEmails = <String, String>{};
+      for (final member in members) {
+        final email = member['controller'].text.trim();
+        if (email.isNotEmpty) {
+          newMemberEmails[email] = member['role'];
+        }
+      }
+      for (final email in newMemberEmails.keys) {
+        if (!_existingMemberEmails.contains(email)) {
+          await _adminService.addMemberByEmail(
+              widget.organization['id'], email, newMemberEmails[email]!);
+        }
+      }
+
+      for (final email in newMemberEmails.keys) {
+        if (_existingMemberEmails.contains(email)) {
+          final existingMembers =
+              await _adminService.getOrganizationMembers(widget.organization['id']);
+          final existingMember = existingMembers.firstWhere(
+            (m) => m['email'] == email,
+            orElse: () => {},
+          );
+          
+          if (existingMember.isNotEmpty && existingMember['role'] != newMemberEmails[email]) {
+            await _adminService.updateUserRole(
+                widget.organization['id'], email, newMemberEmails[email]!);
+          }
+        }
+      }
+
+      // Remove deleted members but never remove the current admin user
+      for (final email in _existingMemberEmails) {
+        if (!newMemberEmails.containsKey(email) &&
+            email != currentUserEmail) {
+          await _adminService.removeMember(widget.organization['id'], email);
+        }
+      }
+
       if (!context.mounted) return;
       Navigator.pop(context);
       Navigator.pushReplacement(context,
@@ -351,6 +434,7 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
     } catch (e) {
       Navigator.pop(context);
       // TODO: Show a proper error message to the user
+      print('Error updating organization: $e');
     }
   }
 }

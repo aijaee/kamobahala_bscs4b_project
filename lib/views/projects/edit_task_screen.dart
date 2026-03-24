@@ -27,13 +27,9 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   bool _financialDetailsEnabled = true;
   bool _deductFromBudget = false;
   String _selectedPriority = "Low";
-  
-  // Form controllers
   late TextEditingController _taskNameController;
   late TextEditingController _estimatedExpenseController;
   late TextEditingController _noteController;
-  
-  // Selected values
   String? _selectedCategory;
   String? _selectedAssignee;
   String? _selectedStatus = 'todo';
@@ -41,6 +37,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   DateTime? _selectedDueDate;
   List<String> _categories = [];
   List<Map<String, dynamic>> _teamMembers = [];
+  String? _selectedAssigneeFullName;
   bool _isLoadingData = true;
   String? _loadError;
 
@@ -56,8 +53,11 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     _selectedStatus = widget.task['status'] ?? 'todo';
     _deductFromBudget = widget.task['deduct_from_budget'] ?? false;
     _selectedCategory = widget.task['category'] ?? 'Uncategorized';
-    _selectedAssignee = widget.task['assigned_to'];
+    _selectedAssignee = widget.task['assignee'];
     _selectedExpenseCategory = widget.task['expense_category'] ?? 'Transportation';
+    if (_selectedAssignee != null) {
+      _loadAssigneeFullName(_selectedAssignee!);
+    }
     
     if (widget.task['due_date'] != null) {
       _selectedDueDate = DateTime.tryParse(widget.task['due_date'].toString());
@@ -85,6 +85,22 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     }
   }
 
+  Future<void> _loadAssigneeFullName(String email) async {
+    try {
+      final member = _teamMembers.firstWhere(
+        (m) => m['email'] == email,
+        orElse: () => {},
+      );
+      if (member.isNotEmpty && mounted) {
+        setState(() {
+          _selectedAssigneeFullName = member['name'];
+        });
+      }
+    } catch (e) {
+      print('Error loading assignee name: $e');
+    }
+  }
+
   @override
   void dispose() {
     _taskNameController.dispose();
@@ -105,7 +121,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       'title': _taskNameController.text,
       'category': _selectedCategory ?? 'Uncategorized',
       'priority': _selectedPriority,
-      'assigned_to': _selectedAssignee,
+      'assignee': _selectedAssignee,
       'due_date': _selectedDueDate?.toIso8601String(),
       'notes': _noteController.text,
       'status': _selectedStatus,
@@ -131,11 +147,8 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     }
   }
 
-  /// Handle task deletion with confirmation dialog
   Future<void> _handleDeleteTask(BuildContext context) async {
     final taskTitle = widget.task['title'] ?? 'Untitled Task';
-    
-    // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -162,34 +175,19 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     try {
       final taskId = widget.task['task_id'] ?? widget.task['id'];
       
-      if (taskId == null || taskId.isEmpty) {
-        throw Exception('Invalid task ID');
-      }
-      
-      // Delete the task
+      if (taskId == null || taskId.isEmpty) throw Exception('Invalid task ID');
       final success = await Provider.of<TasksViewModel>(context, listen: false).deleteTask(taskId);
       
-      if (!success) {
-        throw Exception('Failed to delete task from database');
-      }
-
+      if (!success) throw Exception('Delete failed');
       if (mounted) {
-        // Refresh all related data to update all screens
-        // 1. Refresh tasks for the project (updates task list and project sections)
         await Provider.of<TasksViewModel>(context, listen: false)
             .fetchProjectTasks(widget.projectId);
-        
-        // 2. Refresh financial data (updates budget and balance)
         await Provider.of<FinancialViewModel>(context, listen: false)
             .fetchTransactions(widget.organizationId);
-
-        // Show success message and navigate back
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Task "$taskTitle" deleted successfully')),
         );
-        
-        // Pop back to previous screen (will show updated data)
-        Navigator.pop(context, true); // Return true to signal that data was changed
+        Navigator.pop(context, true);
       }
     } catch (e) {
       if (mounted) {
@@ -500,7 +498,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
             onTap: _showAssigneePicker,
             child: _buildListTile(
               "Assignee",
-              _selectedAssignee ?? "Select Assignee",
+              _selectedAssigneeFullName ?? _selectedAssignee ?? "Select Assignee",
               true,
             ),
           ),
@@ -532,8 +530,8 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: _teamMembers.map((member) => ListTile(
-              title: Text(member['email'] ?? 'Unknown'),
-              subtitle: Text(member['name'] ?? ''),
+              title: Text(member['name'] ?? member['email'] ?? 'Unknown'),
+              subtitle: Text(member['email'] ?? ''),
               onTap: () => Navigator.pop(context, member['email']),
             )).toList(),
           ),
@@ -541,7 +539,15 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       ),
     );
     if (selected != null) {
-      setState(() => _selectedAssignee = selected);
+      // Find the name of the selected member
+      final member = _teamMembers.firstWhere(
+        (m) => m['email'] == selected,
+        orElse: () => {},
+      );
+      setState(() {
+        _selectedAssignee = selected;
+        _selectedAssigneeFullName = member.isNotEmpty ? member['name'] : null;
+      });
     }
   }
 
