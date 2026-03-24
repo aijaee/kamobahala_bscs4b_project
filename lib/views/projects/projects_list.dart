@@ -223,8 +223,6 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
                         children: [
-                          _buildFinancialCard(),
-                          const SizedBox(height: 20),
                           _sectionHeader("Ongoing Projects", ""),
                           const SizedBox(height: 12),
                           if (projectsViewModel.isLoading)
@@ -400,95 +398,6 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  /// FINANCE CARD
-  Widget _buildFinancialCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF137FEC),
-            Color.fromARGB(255, 33, 70, 113),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF137FEC).withValues(alpha: 0.2),
-            blurRadius: 15,
-            offset: const Offset(0, 10),
-          )
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "TOTAL DEPOSITORY BALANCE",
-                style: GoogleFonts.inter(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  fontSize: 12,
-                  letterSpacing: 0.6,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              IconButton(
-                icon: Icon(
-                  _balanceHidden ? Icons.visibility_off : Icons.visibility,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                onPressed: () {
-                  setState(() {
-                    _balanceHidden = !_balanceHidden;
-                  });
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _balanceHidden ? "••••••••" : _formatCurrency(_balance),
-            style: GoogleFonts.inter(
-              color: Colors.white,
-              fontSize: 30,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => FinancialLedgerScreen(
-                    organization: widget.organization,
-                  ),
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF137FEC),
-              minimumSize: const Size(double.infinity, 44),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 0,
-            ),
-            child: const Text("View Financial Details"),
-          ),
-        ],
       ),
     );
   }
