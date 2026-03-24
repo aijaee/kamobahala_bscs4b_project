@@ -5,9 +5,13 @@ import '../../viewmodels/financial_viewmodel.dart';
 import '../../viewmodels/organization_dashboard_viewmodel.dart';
 import '../../viewmodels/projects_viewmodel.dart';
 import '../../core/services/organization_service.dart';
+import '../../core/services/admin_service.dart';
+import '../../core/services/dashboard_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'financial_ledger.dart';
 import '../projects/projects_list.dart';
 import '../projects/project_overview.dart';
+import '../projects/task_details.dart';
 
 class OrganizationDashboard extends StatefulWidget {
   final Map<String, dynamic> organization;
@@ -24,13 +28,34 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   late FinancialViewModel _financialViewModel;
   late OrganizationDashboardViewModel _dashboardViewModel;
   final OrganizationService _orgService = OrganizationService();
+  final AdminService _adminService = AdminService();
   bool _balanceHidden = true;
+  bool _isAdmin = false;
+  String? _userEmail;
 
   @override
   void initState() {
     super.initState();
-    _initializeViewModels();
     WidgetsBinding.instance.addObserver(this);
+    
+    // Initialize view models immediately with default values
+    _financialViewModel = FinancialViewModel();
+    _dashboardViewModel = OrganizationDashboardViewModel(
+      financialViewModel: _financialViewModel,
+    );
+    _financialViewModel.addListener(_onViewModelChanged);
+    _dashboardViewModel.addListener(_onViewModelChanged);
+    
+    // Get admin status and user email, then load data
+    _getUserEmail();
+    _checkAdminStatus();
+    
+    // Load data after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadBalance();
+      }
+    });
   }
 
   @override
@@ -65,18 +90,40 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     _dashboardViewModel = OrganizationDashboardViewModel(
       financialViewModel: _financialViewModel,
     );
-    _loadBalance();
     _financialViewModel.addListener(_onViewModelChanged);
+    _dashboardViewModel.addListener(_onViewModelChanged);
+    
+    // Defer loading balance to after frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadBalance();
+      }
+    });
   }
 
   void _cleanupViewModels() {
     _financialViewModel.removeListener(_onViewModelChanged);
+    _dashboardViewModel.removeListener(_onViewModelChanged);
     _financialViewModel.dispose();
     _dashboardViewModel.dispose();
   }
 
   void _onViewModelChanged() {
     setState(() {});
+  }
+
+  Future<void> _checkAdminStatus() async {
+    final isAdmin = await _adminService.isUserAdmin(widget.organization['id'].toString());
+    if (mounted) {
+      setState(() => _isAdmin = isAdmin);
+    }
+  }
+
+  void _getUserEmail() {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (mounted) {
+      setState(() => _userEmail = user?.email);
+    }
   }
 
   /// Loads balance using ViewModel
@@ -87,6 +134,19 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       widget.organization,
       _financialViewModel.transactions,
     );
+    
+    // Fetch priority deadlines based on user role
+    if (_isAdmin) {
+      await _dashboardViewModel.fetchAdminDeadlines(
+        widget.organization['id'].toString(),
+        _userEmail,
+      );
+    } else {
+      await _dashboardViewModel.fetchMemberDeadlines(
+        widget.organization['id'].toString(),
+        _userEmail,
+      );
+    }
     
     // Sync member names from profiles to ensure they're populated
     await _orgService.syncMemberNamesFromProfiles(widget.organization['id'].toString());
@@ -105,13 +165,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
 
   @override
   Widget build(BuildContext context) {
-    final List<Map<String, dynamic>> deadlines = [
-      {'title': 'Logistics', 'tasks': '3 tasks due today', 'icon': Icons.local_shipping, 'color': Colors.orange},
-      {'title': 'Visuals', 'tasks': '5 tasks this week', 'icon': Icons.palette, 'color': Colors.purple},
-      {'title': 'Dev Ops', 'tasks': '1 urgent patch', 'icon': Icons.code, 'color': Colors.blue},
-      {'title': 'Marketing', 'tasks': 'All clear', 'icon': Icons.campaign, 'color': Colors.green},
-    ];
-
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F8),
       body: SafeArea(
@@ -126,9 +179,15 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                     delegate: SliverChildListDelegate([
                       _buildFinancialCard(context),
                       const SizedBox(height: 24),
-                      _buildSectionHeader("Priority Deadlines", "View Calendar"),
+                      _buildSectionHeader(
+                        _isAdmin ? "Priority Overview" : "My Priority Tasks",
+                        "View All",
+                        onPressed: () {
+                          _showAllTasksModal(context);
+                        },
+                      ),
                       const SizedBox(height: 12),
-                      _buildDeadlinesGrid(deadlines),
+                      _buildDeadlinesList(context),
                       const SizedBox(height: 24),
 
                       _buildSectionHeader(
@@ -296,35 +355,652 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     );
   }
 
-  Widget _buildDeadlinesGrid(List<Map<String, dynamic>> items) {
+  Widget _buildDeadlinesList(BuildContext context) {
+    if (_dashboardViewModel.isLoadingDeadlines) {
+      return const SizedBox(
+        height: 200,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_isAdmin) {
+      // Admin view: show priority summary cards
+      return _buildAdminPriorityCards(context);
+    } else {
+      // Member view: show assigned tasks list
+      return _buildTasksSection(
+        "My Priority Tasks",
+        _dashboardViewModel.priorityDeadlines,
+        context,
+      );
+    }
+  }
+
+  Widget _buildAdminPriorityCards(BuildContext context) {
+    final allTasks = _dashboardViewModel.priorityDeadlines;
+    final assignedTasks = _dashboardViewModel.assignedDeadlines;
+
+    // Count tasks by priority
+    final highCount =
+        allTasks.where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'high').length;
+    final mediumCount = allTasks
+        .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'medium')
+        .length;
+    final lowCount =
+        allTasks.where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'low').length;
+
+    final cards = [
+      {
+        'title': 'High Priority',
+        'count': highCount,
+        'color': 0xFFEF4444,
+        'icon': Icons.error,
+        'subtitle': '$highCount task${highCount != 1 ? 's' : ''} to handle',
+      },
+      {
+        'title': 'Medium Priority',
+        'count': mediumCount,
+        'color': 0xFFF97316,
+        'icon': Icons.warning,
+        'subtitle': '$mediumCount task${mediumCount != 1 ? 's' : ''} in progress',
+      },
+      {
+        'title': 'Low Priority',
+        'count': lowCount,
+        'color': 0xFF22C55E,
+        'icon': Icons.info,
+        'subtitle': '$lowCount task${lowCount != 1 ? 's' : ''} planned',
+      },
+      {
+        'title': 'My Tasks',
+        'count': assignedTasks.length,
+        'color': 0xFF8B5CF6,
+        'icon': Icons.assignment,
+        'subtitle':
+            '${assignedTasks.length} task${assignedTasks.length != 1 ? 's' : ''} assigned to me',
+      },
+    ];
+
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, crossAxisSpacing: 12, mainAxisSpacing: 12, childAspectRatio: 1.6,
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.3,
       ),
-      itemCount: items.length,
+      itemCount: cards.length,
       itemBuilder: (context, index) {
-        final item = items[index];
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFF3F4F6))),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(item['icon'], size: 16, color: item['color']),
-                  const SizedBox(width: 8),
-                  Text(item['title'], style: GoogleFonts.inter(fontSize: 12, color: Colors.grey[600], fontWeight: FontWeight.w600)),
-                ],
-              ),
-              const Spacer(),
-              Text(item['tasks'], style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold)),
-            ],
+        final card = cards[index];
+        final color = Color(card['color'] as int);
+
+        return GestureDetector(
+          onTap: () {
+            // Could navigate to filtered task list
+          },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFF3F4F6)),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        card['icon'] as IconData,
+                        size: 16,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        card['title'] as String,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  '${card['count']} tasks',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  card['subtitle'] as String,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: Colors.grey[500],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildTasksSection(
+    String title,
+    List<Map<String, dynamic>> tasks,
+    BuildContext context,
+  ) {
+    if (tasks.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFF3F4F6)),
+        ),
+        child: Center(
+          child: Column(
+            children: [
+              Icon(Icons.check_circle_outline, size: 48, color: Colors.green[300]),
+              const SizedBox(height: 12),
+              Text(
+                "No priority tasks at this time",
+                style: GoogleFonts.inter(
+                  color: Colors.grey,
+                  fontSize: 14,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (title != "All Priority Tasks" && title != "My Priority Tasks")
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              title,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+            ),
+          ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: tasks.take(5).length,
+          itemBuilder: (context, index) {
+            final task = tasks[index];
+            final priority = task['priority'] ?? 'Low';
+            final priorityInfo = DashboardService.getPriorityInfo(priority);
+            final urgencyColor = Color(priorityInfo['color'] as int);
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TaskDetailsScreen(task: task),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFF3F4F6)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: urgencyColor.withOpacity(0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: urgencyColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(
+                              Icons.priority_high,
+                              size: 14,
+                              color: urgencyColor,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  task['title'] ?? 'Untitled Task',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF111418),
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  task['projectName'] ?? 'No Project',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: urgencyColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              priorityInfo['label'] as String,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: urgencyColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          if (task['due_date'] != null)
+                            Text(
+                              _formatDate(task['due_date']),
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        if (tasks.length > 5)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: TextButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => ProjectsList(
+                      initialIndex: 1,
+                      organization: widget.organization,
+                    ),
+                  ),
+                );
+              },
+              child: Text(
+                'View all ${tasks.length} tasks',
+                style: const TextStyle(color: Color(0xFF137FEC)),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _formatDate(String? dateString) {
+    if (dateString == null) return '';
+    try {
+      final date = DateTime.parse(dateString);
+      final now = DateTime.now();
+      final difference = date.difference(now);
+
+      if (difference.inDays == 0) {
+        return 'Today';
+      } else if (difference.inDays == 1) {
+        return 'Tomorrow';
+      } else if (difference.inDays < 0) {
+        return 'Overdue';
+      } else if (difference.inDays < 7) {
+        return 'In ${difference.inDays} days';
+      } else {
+        return '${date.month}/${date.day}';
+      }
+    } catch (e) {
+      return '';
+    }
+  }
+
+  Future<void> _showAllTasksModal(BuildContext context) {
+    final tasks = _isAdmin
+        ? _dashboardViewModel.priorityDeadlines
+        : _dashboardViewModel.priorityDeadlines;
+
+    return showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFFF6F7F8),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.9,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          builder: (context, scrollController) {
+            return Scaffold(
+              backgroundColor: const Color(0xFFF6F7F8),
+              appBar: AppBar(
+                backgroundColor: Colors.white,
+                elevation: 0,
+                title: Text(
+                  _isAdmin ? "All Priority Tasks" : "My Priority Tasks",
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF111418),
+                  ),
+                ),
+                leading: IconButton(
+                  icon: const Icon(Icons.close, color: Color(0xFF111418)),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              body: tasks.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.check_circle_outline,
+                            size: 64,
+                            color: Colors.green[300],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            "No priority tasks at this time",
+                            style: GoogleFonts.inter(
+                              color: Colors.grey,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Column(
+                      children: [
+                        // Legend Header
+                        Container(
+                          color: Colors.white,
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Priority Levels",
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey[600],
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  _buildLegendItem(
+                                    "High",
+                                    Color(DashboardService.getPriorityInfo('High')['color'] as int),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  _buildLegendItem(
+                                    "Medium",
+                                    Color(DashboardService.getPriorityInfo('Medium')['color'] as int),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  _buildLegendItem(
+                                    "Low",
+                                    Color(DashboardService.getPriorityInfo('Low')['color'] as int),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Divider(height: 1, color: Color(0xFFF3F4F6)),
+                        // Task List
+                        Expanded(
+                          child: ListView.builder(
+                            controller: scrollController,
+                            padding: const EdgeInsets.all(16),
+                            itemCount: tasks.length,
+                            itemBuilder: (context, index) {
+                              final task = tasks[index];
+                              final priority = task['priority'] ?? 'Low';
+                              final priorityInfo =
+                                  DashboardService.getPriorityInfo(priority);
+                              final urgencyColor =
+                                  Color(priorityInfo['color'] as int);
+
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => TaskDetailsScreen(task: task),
+                                      ),
+                                    );
+                                  },
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        border: Border(
+                                          left: BorderSide(
+                                            color: urgencyColor,
+                                            width: 4,
+                                          ),
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: urgencyColor.withOpacity(0.08),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.all(6),
+                                                decoration: BoxDecoration(
+                                                  color: urgencyColor
+                                                      .withOpacity(0.1),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Icon(
+                                                  Icons.priority_high,
+                                                  size: 14,
+                                                  color: urgencyColor,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      task['title'] ??
+                                                          'Untitled Task',
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: const Color(
+                                                            0xFF111418),
+                                                      ),
+                                                      maxLines: 2,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      task['projectName'] ??
+                                                          'No Project',
+                                                      style: GoogleFonts.inter(
+                                                        fontSize: 12,
+                                                        color: Colors.grey[600],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: urgencyColor
+                                                      .withOpacity(0.1),
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  priorityInfo['label']
+                                                      as String,
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 11,
+                                                    color: urgencyColor,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                              if (task['due_date'] != null)
+                                                Text(
+                                                  _formatDate(
+                                                      task['due_date']),
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 11,
+                                                    color: Colors.grey[600],
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: Colors.grey[700],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 

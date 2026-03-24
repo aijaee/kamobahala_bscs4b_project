@@ -40,6 +40,41 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     }
   }
 
+  Future<void> _toggleTaskCompletion() async {
+    try {
+      final taskId = widget.task['id'];
+      if (taskId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to update task - missing ID')),
+        );
+        return;
+      }
+
+      final newStatus = _currentStatus.toLowerCase() == 'completed' ? 'todo' : 'completed';
+
+      await _taskService.updateTask(taskId, {'status': newStatus});
+
+      if (mounted) {
+        setState(() {
+          _currentStatus = newStatus == 'completed' ? 'Completed' : 'To Do';
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Task marked as ${newStatus.toLowerCase()}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating task: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -356,6 +391,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final isCompleted = _currentStatus.toLowerCase() == 'completed';
     return AppBar(
       backgroundColor: const Color(0xFF137FEC),
       elevation: 0,
@@ -373,6 +409,14 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       ),
       centerTitle: true,
       actions: [
+        IconButton(
+          icon: Icon(
+            isCompleted ? Icons.check_circle : Icons.circle_outlined,
+            color: isCompleted ? const Color(0xFFA3E635) : Colors.white,
+            size: 24,
+          ),
+          onPressed: () => _toggleTaskCompletion(),
+        ),
         if (_isAdmin)
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.white, size: 20),
