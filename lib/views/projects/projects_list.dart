@@ -43,11 +43,11 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
     _dashboardViewModel = OrganizationDashboardViewModel(
       financialViewModel: _financialViewModel,
     );
-    _fetchBalance();
     _checkAdminStatus();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
+        _fetchBalance();
         context.read<ProjectsViewModel>().fetchProjectsWithProgress(widget.organization['id'].toString());
         context.read<ProjectsViewModel>().fetchCompletedProjects();
         _buildTabsFromProjects();
