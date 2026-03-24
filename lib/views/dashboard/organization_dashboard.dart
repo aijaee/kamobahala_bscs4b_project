@@ -283,10 +283,33 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                "${widget.organization['name'] ?? 'ORGANIZATION'} TOTAL DEPOSITORY BALANCE".toUpperCase(),
-                style: GoogleFonts.inter(color: Colors.white.withOpacity(0.8), fontSize: 12, letterSpacing: 0.6, fontWeight: FontWeight.w500),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.organization['name'] ?? 'ORGANIZATION',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'TOTAL DEPOSITORY BALANCE',
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 11,
+                        letterSpacing: 0.6,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               IconButton(
                 icon: Icon(
@@ -576,7 +599,11 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                     MaterialPageRoute(
                       builder: (context) => TaskDetailsScreen(task: task),
                     ),
-                  );
+                  ).then((taskUpdated) {
+                    if (taskUpdated == true && mounted) {
+                      _loadBalance();
+                    }
+                  });
                 },
                 child: Container(
                   padding: const EdgeInsets.all(16),
@@ -847,7 +874,11 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                       MaterialPageRoute(
                                         builder: (context) => TaskDetailsScreen(task: task),
                                       ),
-                                    );
+                                    ).then((taskUpdated) {
+                                      if (taskUpdated == true && mounted) {
+                                        _loadBalance();
+                                      }
+                                    });
                                   },
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(12),

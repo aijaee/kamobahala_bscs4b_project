@@ -4,11 +4,15 @@ import 'edit_task_screen.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/task_service.dart';
 import '../../core/services/organization_service.dart';
+import '../../core/services/financial_service.dart';
 
 class TaskDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> task;
 
-  const TaskDetailsScreen({super.key, required this.task});
+  const TaskDetailsScreen({
+    super.key,
+    required this.task,
+  });
 
   @override
   State<TaskDetailsScreen> createState() => _TaskDetailsScreenState();
@@ -17,9 +21,11 @@ class TaskDetailsScreen extends StatefulWidget {
 class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   late String _currentStatus;
   bool _isAdmin = false;
+  bool _taskUpdated = false;
   final AdminService _adminService = AdminService();
   final TaskService _taskService = TaskService();
   final OrganizationService _orgService = OrganizationService();
+  final FinancialService _financialService = FinancialService();
 
   @override
   void initState() {
@@ -43,6 +49,8 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   Future<void> _toggleTaskCompletion() async {
     try {
       final taskId = widget.task['id'];
+      final organizationId = widget.task['organization_id'];
+      
       if (taskId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Unable to update task - missing ID')),
@@ -50,13 +58,63 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         return;
       }
 
-      final newStatus = _currentStatus.toLowerCase() == 'completed' ? 'todo' : 'completed';
+      final isMarkedComplete = _currentStatus.toLowerCase() == 'todo';
+      final newStatus = isMarkedComplete ? 'completed' : 'todo';
 
+      // Update task status
       await _taskService.updateTask(taskId, {'status': newStatus});
+
+      // If marking as completed, record the expense to financial depository
+      if (isMarkedComplete) {
+        final estimatedExpense = (widget.task['estimated_expense'] ?? 0.0) as num;
+        final deductFromBudget = widget.task['deduct_from_budget'] ?? false;
+
+        if (estimatedExpense > 0 && deductFromBudget && organizationId != null) {
+          try {
+            await _financialService.createTransaction(
+              organizationId,
+              {
+                'title': 'Task: ${widget.task['title']}',
+                'transaction_type': 'expense',
+                'amount': estimatedExpense.toDouble(),
+                'category': widget.task['expense_category'] ?? 'Task Expense',
+                'department': 'Projects',
+                'description': 'Task completed: ${widget.task['title']}',
+                'project_id': widget.task['project_id'],
+                'task_id': taskId,
+                'occurred_at': DateTime.now().toIso8601String(),
+              },
+            );
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Note: Task completed, but could not record financial detail: $e')),
+              );
+            }
+          }
+        }
+      } else {
+        // If unchecking (marking as not completed), delete associated financial transactions
+        try {
+          final success = await _financialService.deleteTaskTransactions(taskId);
+          if (!success && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Note: Task status updated, but could not remove financial detail')),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Note: Task status updated, but could not remove financial detail: $e')),
+            );
+          }
+        }
+      }
 
       if (mounted) {
         setState(() {
           _currentStatus = newStatus == 'completed' ? 'Completed' : 'To Do';
+          _taskUpdated = true;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -397,7 +455,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 18),
-        onPressed: () => Navigator.pop(context),
+        onPressed: () => Navigator.pop(context, _taskUpdated),
       ),
       title: Text(
         'Task Details',

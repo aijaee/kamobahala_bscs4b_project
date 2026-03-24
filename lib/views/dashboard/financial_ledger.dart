@@ -205,14 +205,32 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                "${widget.organization['name'] ?? 'ORGANIZATION'} TOTAL DEPOSITORY BALANCE".toUpperCase(),
-                style: GoogleFonts.inter(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  fontSize: 12,
-                  letterSpacing: 0.7,
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.organization['name'] ?? 'ORGANIZATION',
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'TOTAL DEPOSITORY BALANCE',
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 11,
+                        letterSpacing: 0.6,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               IconButton(
