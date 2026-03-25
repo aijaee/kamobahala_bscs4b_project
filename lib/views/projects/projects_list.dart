@@ -357,16 +357,6 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  IconButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                                "Create new project functionality coming soon..."),
-                          ),
-                        );
-                      },
-                      icon: const Icon(Icons.add_circle_outline))
                 ],
               ),
               const SizedBox(height: 8),

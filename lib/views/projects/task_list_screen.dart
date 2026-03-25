@@ -379,7 +379,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
             MaterialPageRoute(
               builder: (_) => TaskDetailsScreen(task: task),
             ),
-          );
+          ).then((result) {
+            // Refresh task list and financial data when returning
+            Provider.of<TasksViewModel>(context, listen: false)
+                .fetchProjectTasks(widget.projectId);
+            Provider.of<FinancialViewModel>(context, listen: false)
+                .fetchTransactions(widget.organizationId);
+          });
         },
       ),
     );

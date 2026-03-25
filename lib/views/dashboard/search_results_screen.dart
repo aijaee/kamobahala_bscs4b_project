@@ -198,7 +198,10 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
               MaterialPageRoute(
                 builder: (_) => TaskDetailsScreen(task: task),
               ),
-            );
+            ).then((_) {
+              // Pop back to previous screen after task update
+              Navigator.pop(context, true);
+            });
           },
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),

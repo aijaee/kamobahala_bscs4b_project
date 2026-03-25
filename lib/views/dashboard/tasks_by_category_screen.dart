@@ -200,7 +200,12 @@ class _TasksByCategoryScreenState extends State<TasksByCategoryScreen> {
                             MaterialPageRoute(
                               builder: (_) => TaskDetailsScreen(task: task),
                             ),
-                          );
+                          ).then((result) {
+                            if (result == true) {
+                              // Pop back to dashboard to refresh
+                              Navigator.pop(context, true);
+                            }
+                          });
                         },
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 12),

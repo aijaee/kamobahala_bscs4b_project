@@ -202,7 +202,12 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
           transactions: allTransactions,
         ),
       ),
-    );
+    ).then((result) {
+      // Refresh dashboard data when returning from search results
+      if (result == true && mounted) {
+        _loadBalance();
+      }
+    });
   }
 
   void _updateSearchSuggestions(String query) {
@@ -298,7 +303,11 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
         MaterialPageRoute(
           builder: (_) => TaskDetailsScreen(task: data),
         ),
-      );
+      ).then((taskUpdated) {
+        if (taskUpdated == true && mounted) {
+          _loadBalance();
+        }
+      });
     } else if (type == 'project') {
       Navigator.push(
         context,
@@ -396,9 +405,15 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  widget.organization['name'] ?? 'Organization',
-                  style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF111418)),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      widget.organization['name'] ?? 'Organization',
+                      style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF111418)),
+                    ),
+                  ),
                 ),
                 TextButton.icon(
                   icon: const Icon(Icons.arrow_back, size: 24, color: Colors.blue),
@@ -745,7 +760,11 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                   categoryColor: color,
                 ),
               ),
-            );
+            ).then((result) {
+              if (result == true && mounted) {
+                _loadBalance();
+              }
+            });
           },
           child: Container(
             padding: const EdgeInsets.all(16),
@@ -922,7 +941,11 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                   categoryColor: color,
                 ),
               ),
-            );
+            ).then((result) {
+              if (result == true && mounted) {
+                _loadBalance();
+              }
+            });
           },
           child: Container(
             padding: const EdgeInsets.all(16),
