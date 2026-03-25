@@ -222,20 +222,25 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
             ),
 
             Expanded(
-                child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // TODO: [MVVM] bind UI to ViewModel.isLoading and ViewModel.organizations
-                    if (_isLoading)
-                      const Center(child: CircularProgressIndicator())
-                    else if (!hasOrganizations)
-                      _buildOrgEmptyState()
-                    else
-                      _buildOrganizationList(_organizations),
-                    const SizedBox(height: 24),
-                  ]),
+                child: RefreshIndicator(
+              onRefresh: _fetchData,
+              color: const Color(0xFF137FEC),
+              backgroundColor: Colors.white,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // TODO: [MVVM] bind UI to ViewModel.isLoading and ViewModel.organizations
+                      if (_isLoading)
+                        const Center(child: CircularProgressIndicator())
+                      else if (!hasOrganizations)
+                        _buildOrgEmptyState()
+                      else
+                        _buildOrganizationList(_organizations),
+                      const SizedBox(height: 24),
+                    ]),
+              ),
             ))
           ],
         ),

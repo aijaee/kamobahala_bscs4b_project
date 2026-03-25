@@ -67,6 +67,7 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
     if (mounted) {
       await context.read<ProjectsViewModel>().fetchProjectsWithProgress(widget.organization['id'].toString());
       _buildTabsFromProjects();
+      await _fetchBalance();
     }
   }
 
@@ -160,56 +161,66 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
               child: const Icon(Icons.add, color: Colors.white),
             )
           : null,
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: currentIndex,
-        selectedItemColor: const Color(0xFF137FEC),
-        unselectedItemColor: Colors.grey,
-        onTap: (idx) {
-          if (idx == 0) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) =>
-                    OrganizationDashboard(organization: widget.organization),
-              ),
-            );
-          } else if (idx == 2) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => FinancialLedgerScreen(
-                      initialIndex: 2, organization: widget.organization)),
-            );
-          } else if (idx == 3) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Profile screen coming soon..."),
-              ),
-            );
-          } else {
-            setState(() {
-              currentIndex = idx;
-            });
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded),
-            label: "Dashboard",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.assignment_outlined),
-            label: "Projects",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            label: "Finances",
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            label: "Profile",
-          ),
-        ],
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
+        child: BottomNavigationBar(
+          currentIndex: currentIndex,
+          selectedItemColor: const Color(0xFF137FEC),
+          unselectedItemColor: const Color(0xFF9CA3AF),
+          onTap: (idx) {
+            if (idx == 0) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      OrganizationDashboard(organization: widget.organization),
+                ),
+              );
+            } else if (idx == 2) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => FinancialLedgerScreen(
+                        initialIndex: 2, organization: widget.organization)),
+              );
+            } else if (idx == 3) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("Profile screen coming soon..."),
+                ),
+              );
+            } else {
+              setState(() {
+                currentIndex = idx;
+              });
+            }
+          },
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          showUnselectedLabels: true,
+          selectedFontSize: 10,
+          unselectedFontSize: 10,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.grid_view_rounded),
+              label: "Dashboard",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.assignment_outlined),
+              label: "Projects",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              label: "Finances",
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline),
+              label: "Profile",
+            ),
+          ],
+        ),
       ),
       body: Consumer<ProjectsViewModel>(
         builder: (context, projectsViewModel, _) {
@@ -220,95 +231,100 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                   children: [
                     _header(),
                     Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                        children: [
-                          _sectionHeader("Ongoing Projects", ""),
-                          const SizedBox(height: 12),
-                          if (projectsViewModel.isLoading)
-                            const Center(child: CircularProgressIndicator())
-                          else if (_getFilteredProjects(projectsViewModel.projects).isEmpty)
-                            const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(20.0),
-                                child: Text("No projects found."),
-                              ),
-                            )
-                          else
-                            ..._getFilteredProjects(projectsViewModel.projects)
-                                .asMap()
-                                .entries
-                                .map((entry) {
-                              final project = entry.value;
-                              final isLast = entry.key == _getFilteredProjects(projectsViewModel.projects).length - 1;
-                              final progress = (project['progress'] as num?)?.toDouble() ?? 0.0;
+                      child: RefreshIndicator(
+                        onRefresh: _refreshProjectsWithProgress,
+                        color: const Color(0xFF137FEC),
+                        backgroundColor: Colors.white,
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+                          children: [
+                            _sectionHeader("Ongoing Projects", ""),
+                            const SizedBox(height: 12),
+                            if (projectsViewModel.isLoading)
+                              const Center(child: CircularProgressIndicator())
+                            else if (_getFilteredProjects(projectsViewModel.projects).isEmpty)
+                              const Center(
+                                child: Padding(
+                                  padding: EdgeInsets.all(20.0),
+                                  child: Text("No projects found."),
+                                ),
+                              )
+                            else
+                              ..._getFilteredProjects(projectsViewModel.projects)
+                                  .asMap()
+                                  .entries
+                                  .map((entry) {
+                                final project = entry.value;
+                                final isLast = entry.key == _getFilteredProjects(projectsViewModel.projects).length - 1;
+                                final progress = (project['progress'] as num?)?.toDouble() ?? 0.0;
 
-                              double spent = 0.0;
-                              final projectId = project['id'];
-                              for (final transaction in financialViewModel.transactions) {
-                                if (transaction['project_id'] == projectId &&
-                                    (transaction['transaction_type'] ?? '').toString().toLowerCase() == 'expense' &&
-                                    (transaction['title'] ?? '').toString().startsWith('Task:')) {
-                                  spent += (transaction['amount'] as num?)?.toDouble() ?? 0.0;
+                                double spent = 0.0;
+                                final projectId = project['id'];
+                                for (final transaction in financialViewModel.transactions) {
+                                  if (transaction['project_id'] == projectId &&
+                                      (transaction['transaction_type'] ?? '').toString().toLowerCase() == 'expense' &&
+                                      (transaction['title'] ?? '').toString().startsWith('Task:')) {
+                                    spent += (transaction['amount'] as num?)?.toDouble() ?? 0.0;
+                                  }
                                 }
-                              }
 
-                              final projectBudget = (project['budget'] as num?)?.toDouble() ?? 0.0;
-                              String budget = projectBudget > 0 ? "₱${projectBudget.toStringAsFixed(2)}" : "₱0.00";
-                              String spentStr = spent > 0 ? "₱${spent.toStringAsFixed(2)}" : "₱0.00";
+                                final projectBudget = (project['budget'] as num?)?.toDouble() ?? 0.0;
+                                String budget = projectBudget > 0 ? "₱${projectBudget.toStringAsFixed(2)}" : "₱0.00";
+                                String spentStr = spent > 0 ? "₱${spent.toStringAsFixed(2)}" : "₱0.00";
 
-                              return Column(
-                                children: [
-                                  _projectCard(
-                                    tag: project['status'] ?? "Active",
-                                    title: project['name'] ?? "Untitled Project",
-                                    progress: progress,
-                                    spent: spentStr,
-                                    limit: budget,
-                                    color: const Color(0xFF137FEC),
-                                    projectId: project['id'],
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ProjectOverviewScreen(
-                                            organization: widget.organization,
-                                            project: project,
+                                return Column(
+                                  children: [
+                                    _projectCard(
+                                      tag: project['status'] ?? "Active",
+                                      title: project['name'] ?? "Untitled Project",
+                                      progress: progress,
+                                      spent: spentStr,
+                                      limit: budget,
+                                      color: const Color(0xFF137FEC),
+                                      projectId: project['id'],
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ProjectOverviewScreen(
+                                              organization: widget.organization,
+                                              project: project,
+                                            ),
                                           ),
-                                        ),
-                                      ).then((_) {
-                                        _refreshProjectsWithProgress();
-                                      });
-                                    },
-                                  ),
-                                  if (!isLast) const SizedBox(height: 12),
-                                ],
-                              );
-                            }).toList(),
-                          const SizedBox(height: 20),
-                          _sectionHeader("Completed", ""),
-                          const SizedBox(height: 12),
-                          ...projectsViewModel.completedProjects.isEmpty
-                              ? [
-                                  const Center(
-                                    child: Padding(
-                                      padding: EdgeInsets.all(20.0),
-                                      child: Text("No completed projects yet."),
+                                        ).then((_) {
+                                          _refreshProjectsWithProgress();
+                                        });
+                                      },
                                     ),
-                                  )
-                                ]
-                              : projectsViewModel.completedProjects.map((project) {
-                                  final budget = project['budget'] != null
-                                      ? "₱${project['budget']}"
-                                      : "₱0";
-                                  return _completedCard(
-                                    title: project['name'] ?? "Project",
-                                    amount: budget,
-                                    completedDate:
-                                        project['due_date'] ?? "Recently completed",
-                                  );
-                                }).toList(),
-                        ],
+                                    if (!isLast) const SizedBox(height: 12),
+                                  ],
+                                );
+                              }).toList(),
+                            const SizedBox(height: 20),
+                            _sectionHeader("Completed", ""),
+                            const SizedBox(height: 12),
+                            ...projectsViewModel.completedProjects.isEmpty
+                                ? [
+                                    const Center(
+                                      child: Padding(
+                                        padding: EdgeInsets.all(20.0),
+                                        child: Text("No completed projects yet."),
+                                      ),
+                                    )
+                                  ]
+                                : projectsViewModel.completedProjects.map((project) {
+                                    final budget = project['budget'] != null
+                                        ? "₱${project['budget']}"
+                                        : "₱0";
+                                    return _completedCard(
+                                      title: project['name'] ?? "Project",
+                                      amount: budget,
+                                      completedDate:
+                                          project['due_date'] ?? "Recently completed",
+                                    );
+                                  }).toList(),
+                          ],
+                        ),
                       ),
                     ),
                   ],

@@ -43,6 +43,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
     });
   }
 
+  /// Refresh callback for pull-to-refresh
+  Future<void> _refreshTasks() async {
+    await Provider.of<TasksViewModel>(context, listen: false)
+        .fetchProjectTasks(widget.projectId);
+  }
+
   Future<void> _checkAdminStatus() async {
     final isAdmin = await _adminService.isUserAdmin(widget.organizationId);
     setState(() => _isAdmin = isAdmin);
@@ -193,31 +199,17 @@ class _TaskListScreenState extends State<TaskListScreen> {
       appBar: _buildAppBar(context),
       body: Consumer<TasksViewModel>(
         builder: (context, tasksViewModel, _) {
-          if (tasksViewModel.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          if (tasksViewModel.errorMessage != null) {
-            return Center(child: Text(tasksViewModel.errorMessage ?? 'Error'));
-          }
-
-          final tasks = tasksViewModel.tasks;
-          if (tasks.isEmpty) {
-            return _buildEmptyState();
-          }
-
-          // Calculate progress
-          final completedTasks = tasks.where((task) => task['status'] == 'completed').length;
-          final progress = tasks.isNotEmpty ? completedTasks / tasks.length : 0.0;
-
-          return SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildProgressHeader(progress),
-                ...tasks.map((task) => _buildTaskCard(context, task)),
-              ],
-            ),
+          return RefreshIndicator(
+            onRefresh: _refreshTasks,
+            color: const Color(0xFF137FEC),
+            backgroundColor: Colors.white,
+            child: tasksViewModel.isLoading && tasksViewModel.tasks.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : tasksViewModel.errorMessage != null && tasksViewModel.tasks.isEmpty
+                    ? Center(child: Text(tasksViewModel.errorMessage ?? 'Error'))
+                    : tasksViewModel.tasks.isEmpty
+                        ? _buildEmptyState()
+                        : _buildTaskList(tasksViewModel),
           );
         },
       ),
@@ -242,6 +234,22 @@ class _TaskListScreenState extends State<TaskListScreen> {
             )
           : null,
       bottomNavigationBar: _buildBottomNav(context),
+    );
+  }
+
+  Widget _buildTaskList(TasksViewModel tasksViewModel) {
+    final tasks = tasksViewModel.tasks;
+    final completedTasks = tasks.where((task) => task['status'] == 'completed').length;
+    final progress = tasks.isNotEmpty ? completedTasks / tasks.length : 0.0;
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildProgressHeader(progress),
+          ...tasks.map((task) => _buildTaskCard(context, task)),
+        ],
+      ),
     );
   }
 
@@ -445,48 +453,57 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 
   Widget _buildBottomNav(BuildContext context) {
-    return BottomNavigationBar(
-      type: BottomNavigationBarType.fixed,
-      selectedItemColor: const Color(0xFF137FEC),
-      unselectedItemColor: Colors.grey,
-      currentIndex: 1,
-      onTap: (index) {
-        if (index == 0) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => OrganizationDashboard(
-                organization: {
-                  'id': widget.organizationId,
-                  'name': 'Organization',
-                },
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
+      child: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: const Color(0xFF137FEC),
+        unselectedItemColor: const Color(0xFF9CA3AF),
+        currentIndex: 1,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        showUnselectedLabels: true,
+        selectedFontSize: 10,
+        unselectedFontSize: 10,
+        onTap: (index) {
+          if (index == 0) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => OrganizationDashboard(
+                  organization: {
+                    'id': widget.organizationId,
+                    'name': 'Organization',
+                  },
+                ),
               ),
-            ),
-          );
-        } else if (index == 2) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => FinancialLedgerScreen(
-                organization: {
-                  'id': widget.organizationId,
-                  'name': 'Organization',
-                },
+            );
+          } else if (index == 2) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => FinancialLedgerScreen(
+                  organization: {
+                    'id': widget.organizationId,
+                    'name': 'Organization',
+                  },
+                ),
               ),
-            ),
-          );
-        }
-      },
-      items: const [
-        BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded), label: "Dashboard"),
-        BottomNavigationBarItem(
-            icon: Icon(Icons.assignment_outlined), label: "Projects"),
-        BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            label: "Finances"),
-        BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
-      ],
+            );
+          }
+        },
+        items: const [
+          BottomNavigationBarItem(
+              icon: Icon(Icons.grid_view_rounded), label: "Dashboard"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.assignment_outlined), label: "Projects"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              label: "Finances"),
+          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
+        ],
+      ),
     );
   }
 }

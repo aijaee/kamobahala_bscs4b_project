@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'edit_task_screen.dart';
+import '../../viewmodels/tasks_viewmodel.dart';
+import '../../viewmodels/financial_viewmodel.dart';
 import '../../core/services/admin_service.dart';
-import '../../core/services/task_service.dart';
 import '../../core/services/organization_service.dart';
-import '../../core/services/financial_service.dart';
 
 class TaskDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -23,9 +24,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   bool _isAdmin = false;
   bool _taskUpdated = false;
   final AdminService _adminService = AdminService();
-  final TaskService _taskService = TaskService();
   final OrganizationService _orgService = OrganizationService();
-  final FinancialService _financialService = FinancialService();
 
   @override
   void initState() {
@@ -46,6 +45,23 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     }
   }
 
+  Future<void> _refreshTask() async {
+    // Refresh task data from the ViewModel
+    try {
+      final projectId = widget.task['project_id'];
+      if (projectId != null && mounted) {
+        final tasksViewModel = context.read<TasksViewModel>();
+        await tasksViewModel.fetchProjectTasks(projectId);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error refreshing task: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _toggleTaskCompletion() async {
     try {
       final taskId = widget.task['id'];
@@ -61,8 +77,21 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       final isMarkedComplete = _currentStatus.toLowerCase() == 'todo';
       final newStatus = isMarkedComplete ? 'completed' : 'todo';
 
-      // Update task status
-      await _taskService.updateTask(taskId, {'status': newStatus});
+      // Get viewmodels from Provider
+      final tasksViewModel = context.read<TasksViewModel>();
+      final financialViewModel = context.read<FinancialViewModel>();
+
+      // Update task status through ViewModel (this will notify listeners)
+      final updateSuccess = await tasksViewModel.updateTask(taskId, {'status': newStatus});
+      
+      if (!updateSuccess) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Error updating task')),
+          );
+        }
+        return;
+      }
 
       // If marking as completed, record the expense to financial depository
       if (isMarkedComplete) {
@@ -71,20 +100,21 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
         if (estimatedExpense > 0 && deductFromBudget && organizationId != null) {
           try {
-            await _financialService.createTransaction(
-              organizationId,
-              {
-                'title': 'Task: ${widget.task['title']}',
-                'transaction_type': 'expense',
-                'amount': estimatedExpense.toDouble(),
-                'category': widget.task['expense_category'] ?? 'Task Expense',
-                'department': 'Projects',
-                'description': 'Task completed: ${widget.task['title']}',
-                'project_id': widget.task['project_id'],
-                'task_id': taskId,
-                'occurred_at': DateTime.now().toIso8601String(),
-              },
-            );
+            // Set organization for financial viewmodel
+            financialViewModel.setCurrentOrganization(organizationId);
+            
+            // Create transaction through ViewModel (this will notify listeners)
+            await financialViewModel.createTransaction({
+              'title': 'Task: ${widget.task['title']}',
+              'transaction_type': 'expense',
+              'amount': estimatedExpense.toDouble(),
+              'category': widget.task['expense_category'] ?? 'Task Expense',
+              'department': 'Projects',
+              'description': 'Task completed: ${widget.task['title']}',
+              'project_id': widget.task['project_id'],
+              'task_id': taskId,
+              'occurred_at': DateTime.now().toIso8601String(),
+            });
           } catch (e) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -96,7 +126,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       } else {
         // If unchecking (marking as not completed), delete associated financial transactions
         try {
-          final success = await _financialService.deleteTaskTransactions(taskId);
+          final success = await financialViewModel.deleteTaskTransactions(taskId);
           if (!success && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Note: Task status updated, but could not remove financial detail')),
@@ -138,17 +168,22 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: _buildAppBar(context),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 100),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildHeroHeader(),
-            _buildInfoGrid(),
-            _buildDescription(),
-            _buildFinancialDetailsCard(),
-            const SizedBox(height: 16),
-          ],
+      body: RefreshIndicator(
+        onRefresh: _refreshTask,
+        color: const Color(0xFF137FEC),
+        backgroundColor: Colors.white,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 100),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeroHeader(),
+              _buildInfoGrid(),
+              _buildDescription(),
+              _buildFinancialDetailsCard(),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );

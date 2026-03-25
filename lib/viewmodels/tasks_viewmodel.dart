@@ -45,6 +45,7 @@ class TasksViewModel extends ChangeNotifier {
   Future<bool> createTask(Map<String, dynamic> taskData) async {
     if (_currentProjectId == null) {
       _errorMessage = 'No project selected';
+      notifyListeners();
       return false;
     }
 
@@ -65,6 +66,7 @@ class TasksViewModel extends ChangeNotifier {
     } catch (e) {
       _errorMessage = 'Failed to create task: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
       return false;
     }
   }
@@ -95,6 +97,7 @@ class TasksViewModel extends ChangeNotifier {
     } catch (e) {
       _errorMessage = 'Failed to update task: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
       return false;
     }
   }
