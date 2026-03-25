@@ -70,6 +70,11 @@ class FinancialViewModel extends ChangeNotifier {
     }
   }
 
+  /// Sets current organization for financial operations
+  void setCurrentOrganization(String organizationId) {
+    _currentOrganizationId = organizationId;
+  }
+
   /// Creates new transaction for current organization
   Future<bool> createTransaction(Map<String, dynamic> transactionData) async {
     if (_currentOrganizationId == null) {
@@ -95,6 +100,28 @@ class FinancialViewModel extends ChangeNotifier {
     } catch (e) {
       _errorMessage = 'Failed to create transaction: ${e.toString()}';
       _setLoading(false);
+      return false;
+    }
+  }
+
+  /// Deletes all financial transactions associated with a task
+  Future<bool> deleteTaskTransactions(String taskId) async {
+    _errorMessage = null;
+
+    try {
+      final success = await _financialService.deleteTaskTransactions(taskId);
+      
+      if (success) {
+        // Remove transactions from local list
+        _transactions.removeWhere((transaction) => 
+            transaction['task_id']?.toString() == taskId);
+        notifyListeners();
+      }
+      
+      return success;
+    } catch (e) {
+      _errorMessage = 'Failed to delete task transactions: ${e.toString()}';
+      notifyListeners();
       return false;
     }
   }

@@ -26,7 +26,7 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
   OrganizationDashboardViewModel({required FinancialViewModel financialViewModel})
       : _financialViewModel = financialViewModel;
 
-  /// financial summary from organization data and transactions
+
   void calculateFinancialSummary(
     Map<String, dynamic> organization,
     List<Map<String, dynamic>> transactions,
@@ -90,7 +90,6 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
   }
 
   /// Fetches priority deadlines for admin view (all tasks)
-  /// Also fetches assigned tasks separately
   Future<void> fetchAdminDeadlines(
     String organizationId,
     String? userEmail,

@@ -9,6 +9,8 @@ import '../../core/services/admin_service.dart';
 import '../../core/services/dashboard_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'financial_ledger.dart';
+import 'tasks_by_category_screen.dart';
+import 'search_results_screen.dart';
 import '../projects/projects_list.dart';
 import '../projects/project_overview.dart';
 import '../projects/task_details.dart';
@@ -32,6 +34,9 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   bool _balanceHidden = true;
   bool _isAdmin = false;
   String? _userEmail;
+  final TextEditingController _searchController = TextEditingController();
+  bool _showSuggestions = false;
+  List<Map<String, dynamic>> _searchSuggestions = [];
 
   @override
   void initState() {
@@ -82,6 +87,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _cleanupViewModels();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -163,6 +169,166 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     });
   }
 
+  Future<void> _refreshDashboard() async {
+    // Refresh projects, balance, and deadlines
+    await context.read<ProjectsViewModel>().fetchProjectsWithProgress(
+          widget.organization['id'].toString(),
+        );
+    await _loadBalance();
+  }
+
+  void _performSearch() {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) return;
+
+    // Get all tasks
+    final allTasks = _dashboardViewModel.priorityDeadlines;
+    
+    // Get all projects from the ProjectsViewModel
+    final projectsViewModel = context.read<ProjectsViewModel>();
+    final allProjects = projectsViewModel.projects;
+    
+    // Get all transactions
+    final allTransactions = _financialViewModel.transactions;
+
+    // Navigate to search results
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SearchResultsScreen(
+          query: query,
+          tasks: allTasks,
+          projects: allProjects,
+          transactions: allTransactions,
+        ),
+      ),
+    ).then((result) {
+      // Refresh dashboard data when returning from search results
+      if (result == true && mounted) {
+        _loadBalance();
+      }
+    });
+  }
+
+  void _updateSearchSuggestions(String query) {
+    if (query.isEmpty) {
+      setState(() {
+        _showSuggestions = false;
+        _searchSuggestions = [];
+      });
+      return;
+    }
+
+    final queryLower = query.toLowerCase();
+    final suggestions = <Map<String, dynamic>>[];
+
+    // Get all tasks, projects, and transactions
+    final allTasks = _dashboardViewModel.priorityDeadlines;
+    final projectsViewModel = context.read<ProjectsViewModel>();
+    final allProjects = projectsViewModel.projects;
+    final allTransactions = _financialViewModel.transactions;
+
+    // Add matching tasks (max 3)
+    final matchingTasks = allTasks
+        .where((task) =>
+            (task['title'] ?? '').toString().toLowerCase().contains(queryLower))
+        .take(3)
+        .toList();
+
+    for (var task in matchingTasks) {
+      suggestions.add({
+        'type': 'task',
+        'title': task['title'] ?? 'Untitled Task',
+        'subtitle': task['projectName'] ?? 'Unknown Project',
+        'icon': Icons.assignment,
+        'data': task,
+      });
+    }
+
+    // Add matching projects (max 3)
+    final matchingProjects = allProjects
+        .where((project) =>
+            (project['name'] ?? '').toString().toLowerCase().contains(queryLower))
+        .take(3)
+        .toList();
+
+    for (var project in matchingProjects) {
+      // Count tasks for this project
+      final projectId = project['id'];
+      final taskCount = allTasks.where((task) => task['project_id'] == projectId).length;
+      
+      suggestions.add({
+        'type': 'project',
+        'title': project['name'] ?? 'Untitled Project',
+        'subtitle': '$taskCount task${taskCount != 1 ? 's' : ''}',
+        'icon': Icons.folder_outlined,
+        'data': project,
+      });
+    }
+
+    // Add matching transactions (max 2)
+    final matchingTransactions = allTransactions
+        .where((transaction) =>
+            (transaction['title'] ?? '').toString().toLowerCase().contains(queryLower) ||
+            (transaction['category'] ?? '').toString().toLowerCase().contains(queryLower))
+        .take(2)
+        .toList();
+
+    for (var transaction in matchingTransactions) {
+      suggestions.add({
+        'type': 'transaction',
+        'title': transaction['title'] ?? 'Transaction',
+        'subtitle': '₱${(transaction['amount'] ?? 0.0).toStringAsFixed(2)}',
+        'icon': Icons.account_balance_wallet_outlined,
+        'data': transaction,
+      });
+    }
+
+    setState(() {
+      _showSuggestions = true;
+      _searchSuggestions = suggestions;
+    });
+  }
+
+  void _handleSuggestionTap(Map<String, dynamic> suggestion) {
+    final type = suggestion['type'];
+    final data = suggestion['data'];
+
+    _searchController.clear();
+    setState(() => _showSuggestions = false);
+
+    if (type == 'task') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TaskDetailsScreen(task: data),
+        ),
+      ).then((taskUpdated) {
+        if (taskUpdated == true && mounted) {
+          _loadBalance();
+        }
+      });
+    } else if (type == 'project') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProjectOverviewScreen(
+            project: data,
+            organization: widget.organization,
+          ),
+        ),
+      );
+    } else if (type == 'transaction') {
+      // Navigate to financial ledger
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => FinancialLedgerScreen(organization: widget.organization),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -170,48 +336,53 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       body: SafeArea(
         child: Stack(
           children: [
-            CustomScrollView(
-              slivers: [
-                _buildHeader(),
-                SliverPadding(
-                  padding: const EdgeInsets.all(16.0),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildFinancialCard(context),
-                      const SizedBox(height: 24),
-                      _buildSectionHeader(
-                        _isAdmin ? "Priority Overview" : "My Priority Tasks",
-                        "View All",
-                        onPressed: () {
-                          _showAllTasksModal(context);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      _buildDeadlinesList(context),
-                      const SizedBox(height: 24),
+            RefreshIndicator(
+              onRefresh: _refreshDashboard,
+              color: const Color(0xFF137FEC),
+              backgroundColor: Colors.white,
+              child: CustomScrollView(
+                slivers: [
+                  _buildHeader(),
+                  SliverPadding(
+                    padding: const EdgeInsets.all(16.0),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _buildFinancialCard(context),
+                        const SizedBox(height: 24),
+                        _buildSectionHeader(
+                          _isAdmin ? "Priority Overview" : "Tasks Assigned",
+                          "View All",
+                          onPressed: () {
+                            _showAllTasksModal(context);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildDeadlinesList(context),
+                        const SizedBox(height: 24),
 
-                      _buildSectionHeader(
-                        "Active Projects",
-                        "See All",
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ProjectsList(
-                                initialIndex: 1,
-                                organization: widget.organization,
+                        _buildSectionHeader(
+                          "Active Projects",
+                          "See All",
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ProjectsList(
+                                  initialIndex: 1,
+                                  organization: widget.organization,
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      _buildProjectsListFromViewModel(context),
-                      const SizedBox(height: 100),
-                    ]),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildProjectsListFromViewModel(context),
+                        const SizedBox(height: 100),
+                      ]),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             Positioned(
               bottom: 0,
@@ -234,32 +405,142 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  widget.organization['name'] ?? 'Organization',
-                  style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF111418)),
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      widget.organization['name'] ?? 'Organization',
+                      style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF111418)),
+                    ),
+                  ),
                 ),
-                Stack(
-                  children: [
-                    const Icon(Icons.notifications_none, size: 24), // Simplified SVG for stability
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle)),
-                    )
-                  ],
+                TextButton.icon(
+                  icon: const Icon(Icons.arrow_back, size: 24, color: Colors.blue),
+                  label: const Text(
+                    'Back to main',
+                    style: TextStyle(color: Colors.blue),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                  },
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            TextField(
-              decoration: InputDecoration(
-                hintText: "Search tasks, projects, or finances",
-                prefixIcon: const Icon(Icons.search, size: 18),
-                filled: true,
-                fillColor: const Color(0xFFE5E7EB).withOpacity(0.5),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              ),
+            // Search bar with suggestions
+            Column(
+              children: [
+                TextField(
+                  controller: _searchController,
+                  onSubmitted: (_) => _performSearch(),
+                  onChanged: (value) {
+                    _updateSearchSuggestions(value);
+                  },
+                  decoration: InputDecoration(
+                    hintText: "Search tasks, projects, or finances",
+                    prefixIcon: const Icon(Icons.search, size: 18),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? GestureDetector(
+                            onTap: () {
+                              _searchController.clear();
+                              setState(() => _showSuggestions = false);
+                            },
+                            child: const Icon(Icons.close, size: 18),
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: const Color(0xFFE5E7EB).withOpacity(0.5),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+                // Suggestions dropdown
+                if (_showSuggestions && _searchSuggestions.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFF3F4F6)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    constraints: const BoxConstraints(maxHeight: 300),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: _searchSuggestions.length,
+                      itemBuilder: (context, index) {
+                        final suggestion = _searchSuggestions[index];
+                        final icon = suggestion['icon'] as IconData;
+                        final title = suggestion['title'] as String;
+                        final subtitle = suggestion['subtitle'] as String;
+
+                        return GestureDetector(
+                          onTap: () => _handleSuggestionTap(suggestion),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF137FEC).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    icon,
+                                    size: 16,
+                                    color: const Color(0xFF137FEC),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.black,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        subtitle,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          color: Colors.grey[600],
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.chevron_right,
+                                  size: 18,
+                                  color: Colors.grey[400],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
             ),
           ],
         ),
@@ -390,12 +671,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       // Admin view: show priority summary cards
       return _buildAdminPriorityCards(context);
     } else {
-      // Member view: show assigned tasks list
-      return _buildTasksSection(
-        "My Priority Tasks",
-        _dashboardViewModel.priorityDeadlines,
-        context,
-      );
+      // Member view: show member-specific priority cards
+      return _buildMemberPriorityCards(context);
     }
   }
 
@@ -457,10 +734,37 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       itemBuilder: (context, index) {
         final card = cards[index];
         final color = Color(card['color'] as int);
+        final cardTitle = card['title'] as String;
 
         return GestureDetector(
           onTap: () {
-            // Could navigate to filtered task list
+            // Filter tasks based on card type
+            List<Map<String, dynamic>> filteredTasks;
+            
+            if (cardTitle == 'High Priority') {
+              filteredTasks = allTasks.where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'high').toList();
+            } else if (cardTitle == 'Medium Priority') {
+              filteredTasks = allTasks.where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'medium').toList();
+            } else if (cardTitle == 'Low Priority') {
+              filteredTasks = allTasks.where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'low').toList();
+            } else { // My Tasks
+              filteredTasks = assignedTasks;
+            }
+
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TasksByCategoryScreen(
+                  title: cardTitle,
+                  tasks: filteredTasks,
+                  categoryColor: color,
+                ),
+              ),
+            ).then((result) {
+              if (result == true && mounted) {
+                _loadBalance();
+              }
+            });
           },
           child: Container(
             padding: const EdgeInsets.all(16),
@@ -533,201 +837,187 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     );
   }
 
-  Widget _buildTasksSection(
-    String title,
-    List<Map<String, dynamic>> tasks,
-    BuildContext context,
-  ) {
-    if (tasks.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFF3F4F6)),
-        ),
-        child: Center(
-          child: Column(
-            children: [
-              Icon(Icons.check_circle_outline, size: 48, color: Colors.green[300]),
-              const SizedBox(height: 12),
-              Text(
-                "No priority tasks at this time",
-                style: GoogleFonts.inter(
-                  color: Colors.grey,
-                  fontSize: 14,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+  Widget _buildMemberPriorityCards(BuildContext context) {
+    final allAssignedTasks = _dashboardViewModel.priorityDeadlines;
+    
+    // Count member's tasks by priority
+    final highCount = allAssignedTasks
+        .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'high')
+        .length;
+    final mediumCount = allAssignedTasks
+        .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'medium')
+        .length;
+    final lowCount = allAssignedTasks
+        .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'low')
+        .length;
+    
+    // Count overdue tasks (status = 'pending' and dueDate is in the past)
+    final now = DateTime.now();
+    final overdueTasks = allAssignedTasks.where((t) {
+      final dueDateStr = t['due_date'];
+      if (dueDateStr == null || dueDateStr.isEmpty) return false;
+      try {
+        final dueDate = DateTime.parse(dueDateStr);
+        return dueDate.isBefore(now) && (t['status'] ?? '').toLowerCase() != 'completed';
+      } catch (e) {
+        return false;
+      }
+    }).toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (title != "All Priority Tasks" && title != "My Priority Tasks")
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              title,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[700],
-              ),
-            ),
-          ),
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: tasks.take(5).length,
-          itemBuilder: (context, index) {
-            final task = tasks[index];
-            final priority = task['priority'] ?? 'Low';
-            final priorityInfo = DashboardService.getPriorityInfo(priority);
-            final urgencyColor = Color(priorityInfo['color'] as int);
+    final cards = [
+      {
+        'title': 'High Priority',
+        'count': highCount,
+        'color': 0xFFEF4444,
+        'icon': Icons.error,
+        'subtitle': '$highCount task${highCount != 1 ? 's' : ''} assigned',
+      },
+      {
+        'title': 'Medium Priority',
+        'count': mediumCount,
+        'color': 0xFFF97316,
+        'icon': Icons.warning,
+        'subtitle': '$mediumCount task${mediumCount != 1 ? 's' : ''} assigned',
+      },
+      {
+        'title': 'Low Priority',
+        'count': lowCount,
+        'color': 0xFF22C55E,
+        'icon': Icons.info,
+        'subtitle': '$lowCount task${lowCount != 1 ? 's' : ''} assigned',
+      },
+      {
+        'title': 'Overdue Tasks',
+        'count': overdueTasks.length,
+        'color': 0xFF8B5CF6,
+        'icon': Icons.schedule,
+        'subtitle':
+            '${overdueTasks.length} task${overdueTasks.length != 1 ? 's' : ''} overdue',
+      },
+    ];
 
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => TaskDetailsScreen(task: task),
-                    ),
-                  ).then((taskUpdated) {
-                    if (taskUpdated == true && mounted) {
-                      _loadBalance();
-                    }
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFF3F4F6)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: urgencyColor.withOpacity(0.08),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: urgencyColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Icon(
-                              Icons.priority_high,
-                              size: 14,
-                              color: urgencyColor,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  task['title'] ?? 'Untitled Task',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF111418),
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  task['projectName'] ?? 'No Project',
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: urgencyColor.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              priorityInfo['label'] as String,
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: urgencyColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          if (task['due_date'] != null)
-                            Text(
-                              _formatDate(task['due_date']),
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.3,
+      ),
+      itemCount: cards.length,
+      itemBuilder: (context, index) {
+        final card = cards[index];
+        final color = Color(card['color'] as int);
+        final cardTitle = card['title'] as String;
+
+        return GestureDetector(
+          onTap: () {
+            // Filter tasks based on card type
+            List<Map<String, dynamic>> filteredTasks;
+            
+            if (cardTitle == 'High Priority') {
+              filteredTasks = allAssignedTasks
+                  .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'high')
+                  .toList();
+            } else if (cardTitle == 'Medium Priority') {
+              filteredTasks = allAssignedTasks
+                  .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'medium')
+                  .toList();
+            } else if (cardTitle == 'Low Priority') {
+              filteredTasks = allAssignedTasks
+                  .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'low')
+                  .toList();
+            } else { // Overdue Tasks
+              filteredTasks = overdueTasks;
+            }
+
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TasksByCategoryScreen(
+                  title: cardTitle,
+                  tasks: filteredTasks,
+                  categoryColor: color,
                 ),
               ),
-            );
+            ).then((result) {
+              if (result == true && mounted) {
+                _loadBalance();
+              }
+            });
           },
-        ),
-        if (tasks.length > 5)
-          Padding(
-            padding: const EdgeInsets.only(top: 12),
-            child: TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ProjectsList(
-                      initialIndex: 1,
-                      organization: widget.organization,
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withOpacity(0.2), width: 1),
+              boxShadow: [
+                BoxShadow(
+                  color: color.withOpacity(0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        card['icon'] as IconData,
+                        size: 16,
+                        color: color,
+                      ),
                     ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        card['title'] as String,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                Text(
+                  '${card['count']} tasks',
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black,
                   ),
-                );
-              },
-              child: Text(
-                'View all ${tasks.length} tasks',
-                style: const TextStyle(color: Color(0xFF137FEC)),
-              ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  card['subtitle'] as String,
+                  style: GoogleFonts.inter(
+                    fontSize: 11,
+                    color: Colors.grey[500],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
             ),
           ),
-      ],
+        );
+      },
     );
   }
+
 
   String _formatDate(String? dateString) {
     if (dateString == null) return '';

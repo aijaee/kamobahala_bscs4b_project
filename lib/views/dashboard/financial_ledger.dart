@@ -83,26 +83,31 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
       bottomNavigationBar: _buildBottomNav(),
       body: Stack(
         children: [
-          ListView(
-            padding: const EdgeInsets.only(bottom: 100),
-            children: [
-              _buildBalanceCard(),
-              _buildFilterTabs(),
-              if (_viewModel.isLoading)
-                const Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (groupedTransactions.isEmpty)
-                _buildEmptyState()
-              else
-                ...groupedTransactions.expand(
-                  (group) => [
-                    _buildDateHeader(group.$1),
-                    ...group.$2.map(_buildTransactionRow),
-                  ],
-                ),
-            ],
+          RefreshIndicator(
+            onRefresh: _fetchTransactions,
+            color: const Color(0xFF137FEC),
+            backgroundColor: Colors.white,
+            child: ListView(
+              padding: const EdgeInsets.only(bottom: 100),
+              children: [
+                _buildBalanceCard(),
+                _buildFilterTabs(),
+                if (_viewModel.isLoading)
+                  const Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (groupedTransactions.isEmpty)
+                  _buildEmptyState()
+                else
+                  ...groupedTransactions.expand(
+                    (group) => [
+                      _buildDateHeader(group.$1),
+                      ...group.$2.map(_buildTransactionRow),
+                    ],
+                  ),
+              ],
+            ),
           ),
           _buildFloatingActionButton(),
         ],
@@ -111,48 +116,52 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   }
 
   Widget _buildBottomNav() {
-    return BottomNavigationBar(
-      currentIndex: currentIndex,
-      onTap: (idx) {
-        if (idx == 0) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-                builder: (_) =>
-                    OrganizationDashboard(organization: widget.organization)),
-          );
-        } else if (idx == 1) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-                builder: (_) => ProjectsList(
-                    initialIndex: 1, organization: widget.organization)),
-          );
-        } else {
-          setState(() {
-            currentIndex = idx;
-          });
-        }
-      },
-      type: BottomNavigationBarType.fixed,
-      backgroundColor: Colors.white.withValues(alpha: 0.9),
-      elevation: 0,
-      selectedItemColor: const Color(0xFF137FEC),
-      unselectedItemColor: const Color(0xFF9CA3AF),
-      showUnselectedLabels: true,
-      selectedFontSize: 10,
-      unselectedFontSize: 10,
-      items: const [
-        BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded), label: "Dashboard"),
-        BottomNavigationBarItem(
-            icon: Icon(Icons.assignment_outlined), label: "Projects"),
-        BottomNavigationBarItem(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            label: "Finances"),
-        BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline), label: "Profile"),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
+      child: BottomNavigationBar(
+        currentIndex: currentIndex,
+        onTap: (idx) {
+          if (idx == 0) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                  builder: (_) =>
+                      OrganizationDashboard(organization: widget.organization)),
+            );
+          } else if (idx == 1) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                  builder: (_) => ProjectsList(
+                      initialIndex: 1, organization: widget.organization)),
+            );
+          } else {
+            setState(() {
+              currentIndex = idx;
+            });
+          }
+        },
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        selectedItemColor: const Color(0xFF137FEC),
+        unselectedItemColor: const Color(0xFF9CA3AF),
+        showUnselectedLabels: true,
+        selectedFontSize: 10,
+        unselectedFontSize: 10,
+        items: const [
+          BottomNavigationBarItem(
+              icon: Icon(Icons.grid_view_rounded), label: "Dashboard"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.assignment_outlined), label: "Projects"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              label: "Finances"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline), label: "Profile"),
+        ],
+      ),
     );
   }
 

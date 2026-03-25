@@ -94,7 +94,7 @@ class DashboardService {
             .from('tasks')
             .select()
             .eq('project_id', projectId)
-            .eq('assigned_to', userEmail)
+            .eq('assignee', userEmail)
             .neq('status', 'completed')
             .order('priority', ascending: true);
 
@@ -153,7 +153,7 @@ class DashboardService {
             .from('tasks')
             .select()
             .eq('project_id', projectId)
-            .eq('assigned_to', userEmail)
+            .eq('assignee', userEmail)
             .neq('status', 'completed')
             .order('priority', ascending: true);
 

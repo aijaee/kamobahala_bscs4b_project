@@ -47,7 +47,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     _taskNameController = TextEditingController(text: widget.task['title'] ?? '');
     _estimatedExpenseController = TextEditingController(
         text: (widget.task['estimated_expense'] ?? 0.0).toString());
-    _noteController = TextEditingController(text: widget.task['notes'] ?? '');
+    _noteController = TextEditingController(text: widget.task['description'] ?? '');
     
     _selectedPriority = widget.task['priority'] ?? 'Low';
     _selectedStatus = widget.task['status'] ?? 'todo';
@@ -123,7 +123,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       'priority': _selectedPriority,
       'assignee': _selectedAssignee,
       'due_date': _selectedDueDate?.toIso8601String(),
-      'notes': _noteController.text,
+      'description': _noteController.text,
       'status': _selectedStatus,
     };
 
