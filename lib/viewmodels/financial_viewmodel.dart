@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/services/financial_service.dart';
+
 class FinancialViewModel extends ChangeNotifier {
   final FinancialService _financialService = FinancialService();
 
@@ -7,7 +8,7 @@ class FinancialViewModel extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   String? _currentOrganizationId;
-  
+
   final List<String> _filters = ['All', 'Income', 'Expenses'];
   int _selectedFilterIndex = 0;
 
@@ -17,18 +18,24 @@ class FinancialViewModel extends ChangeNotifier {
   String? get currentOrganizationId => _currentOrganizationId;
   List<String> get filters => _filters;
   int get selectedFilterIndex => _selectedFilterIndex;
-  
+
   /// Get transactions based on current filter
   List<Map<String, dynamic>> get filteredTransactions {
     if (_selectedFilterIndex == 1) {
       return _transactions.where((transaction) {
-        return (transaction['transaction_type'] ?? '').toString().toLowerCase() == 'income';
+        return (transaction['transaction_type'] ?? '')
+                .toString()
+                .toLowerCase() ==
+            'income';
       }).toList();
     }
 
     if (_selectedFilterIndex == 2) {
       return _transactions.where((transaction) {
-        return (transaction['transaction_type'] ?? '').toString().toLowerCase() == 'expense';
+        return (transaction['transaction_type'] ?? '')
+                .toString()
+                .toLowerCase() ==
+            'expense';
       }).toList();
     }
 
@@ -59,8 +66,7 @@ class FinancialViewModel extends ChangeNotifier {
     _currentOrganizationId = organizationId;
 
     try {
-      _transactions =
-          await _financialService.fetchTransactions(organizationId);
+      _transactions = await _financialService.fetchTransactions(organizationId);
       _setLoading(false);
       notifyListeners();
     } catch (e) {
@@ -90,10 +96,10 @@ class FinancialViewModel extends ChangeNotifier {
         _currentOrganizationId!,
         transactionData,
       );
-      
+
       // Add to local list at the beginning (most recent first)
       _transactions.insert(0, newTransaction);
-      
+
       _setLoading(false);
       notifyListeners();
       return true;
@@ -110,14 +116,14 @@ class FinancialViewModel extends ChangeNotifier {
 
     try {
       final success = await _financialService.deleteTaskTransactions(taskId);
-      
+
       if (success) {
         // Remove transactions from local list
-        _transactions.removeWhere((transaction) => 
-            transaction['task_id']?.toString() == taskId);
+        _transactions.removeWhere(
+            (transaction) => transaction['task_id']?.toString() == taskId);
         notifyListeners();
       }
-      
+
       return success;
     } catch (e) {
       _errorMessage = 'Failed to delete task transactions: ${e.toString()}';
@@ -133,13 +139,22 @@ class FinancialViewModel extends ChangeNotifier {
     }
   }
 
+  double get currentBalance {
+    return _transactions.fold<double>(
+      0.0,
+      (sum, transaction) => sum + getSignedAmount(transaction),
+    );
+  }
+
   double getSignedAmount(Map<String, dynamic> transaction) {
     final amount = _toDouble(transaction['amount']).abs();
-    final type = (transaction['transaction_type'] ?? 'expense').toString().toLowerCase();
-    final title = (transaction['title'] ?? '').toString();
-    
+    final type =
+        (transaction['transaction_type'] ?? 'expense').toString().toLowerCase();
+    final title = (transaction['title'] ?? '').toString().toLowerCase();
+
     // Treat budget allocations as positive (they're internal transfers, not expenses)
-    if (title.contains('Budget Allocation') || title.contains('Budget Adjustment')) {
+    if (title.contains('budget allocation') ||
+        title.contains('budget adjustment')) {
       return amount;
     }
 
@@ -151,12 +166,10 @@ class FinancialViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-
   void clearError() {
     _errorMessage = null;
     notifyListeners();
   }
-
 
   Future<void> refresh() async {
     if (_currentOrganizationId != null) {
@@ -190,8 +203,18 @@ class FinancialViewModel extends ChangeNotifier {
 
   String _monthName(int month) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ];
     return months[month - 1];
   }

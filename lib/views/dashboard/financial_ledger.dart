@@ -118,7 +118,9 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   Widget _buildBottomNav() {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
+      decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.9),
+          border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
       child: BottomNavigationBar(
         currentIndex: currentIndex,
         onTap: (idx) {
@@ -258,7 +260,9 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            _balanceHidden ? "••••••••" : _formatCurrency(_dashboardViewModel.currentBalance),
+            _balanceHidden
+                ? "••••••••"
+                : _formatCurrency(_dashboardViewModel.currentBalance),
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 36,
@@ -333,17 +337,20 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
           transaction['occurred_at']?.toString() ?? '',
         ) ??
         DateTime.now();
-    final department = (transaction['department']?.toString().trim().isNotEmpty ?? false)
-        ? transaction['department'].toString()
-        : 'General';
-    final description = (transaction['description']?.toString().trim().isNotEmpty ?? false)
-        ? transaction['description'].toString()
-        : (amount > 0 ? 'Incoming funds' : 'Expense recorded');
+    final department =
+        (transaction['department']?.toString().trim().isNotEmpty ?? false)
+            ? transaction['department'].toString()
+            : 'General';
+    final description =
+        (transaction['description']?.toString().trim().isNotEmpty ?? false)
+            ? transaction['description'].toString()
+            : (amount > 0 ? 'Incoming funds' : 'Expense recorded');
     final deptColor = _departmentColor(department);
     final title = transaction['title']?.toString() ?? 'Untitled transaction';
-    
+
     // Check if this is a budget allocation
-    final isBudgetAllocation = title.contains('Budget Allocation') || title.contains('Budget Adjustment');
+    final isBudgetAllocation = title.contains('Budget Allocation') ||
+        title.contains('Budget Adjustment');
     bool isIncome = amount > 0 && !isBudgetAllocation;
 
     return Container(
@@ -359,17 +366,24 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
             height: 48,
             decoration: BoxDecoration(
               color: isBudgetAllocation
-                  ? const Color(0x1AF97316) // Orange background for budget allocations
-                  : (isIncome ? const Color(0x1A22C55E) : const Color(0x1A137FEC)),
+                  ? const Color(
+                      0x1AF97316) // Orange background for budget allocations
+                  : (isIncome
+                      ? const Color(0x1A22C55E)
+                      : const Color(0x1A137FEC)),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               isBudgetAllocation
-                  ? Icons.account_balance_wallet // Wallet icon for budget allocations
+                  ? Icons
+                      .account_balance_wallet // Wallet icon for budget allocations
                   : (isIncome ? Icons.south_west : Icons.north_east),
               color: isBudgetAllocation
-                  ? const Color(0xFFF97316) // Orange color for budget allocations
-                  : (isIncome ? const Color(0xFF16A34A) : const Color(0xFF137FEC)),
+                  ? const Color(
+                      0xFFF97316) // Orange color for budget allocations
+                  : (isIncome
+                      ? const Color(0xFF16A34A)
+                      : const Color(0xFF137FEC)),
             ),
           ),
           const SizedBox(width: 16),
@@ -411,7 +425,8 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
                     : '${isIncome ? '+' : '-'}${_formatCurrency(amount.abs())}',
                 style: GoogleFonts.inter(
                   color: isBudgetAllocation
-                      ? const Color(0xFFF97316) // Orange color for budget allocations
+                      ? const Color(
+                          0xFFF97316) // Orange color for budget allocations
                       : (isIncome
                           ? const Color(0xFF16A34A)
                           : const Color(0xFFEF4444)),
@@ -482,6 +497,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
         organizationId: widget.organization['id'].toString(),
         viewModel: _viewModel,
         onTransactionCreated: _fetchTransactions,
+        organization: widget.organization,
       ),
     );
   }
@@ -532,11 +548,13 @@ class _TransactionFormDialog extends StatefulWidget {
   final String organizationId;
   final FinancialViewModel viewModel;
   final VoidCallback onTransactionCreated;
+  final Map<String, dynamic> organization;
 
   const _TransactionFormDialog({
     required this.organizationId,
     required this.viewModel,
     required this.onTransactionCreated,
+    required this.organization,
   });
 
   @override
@@ -548,10 +566,11 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
   late TextEditingController _descriptionController;
   late TextEditingController _departmentController;
   late TextEditingController _amountController;
-  
+
   String _transactionType = 'expense';
   DateTime _occurredAt = DateTime.now();
   bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -592,9 +611,11 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
               const SizedBox(height: 20),
               _buildTextField('Title', _titleController, 'e.g. Venue rental'),
               const SizedBox(height: 12),
-              _buildTextField('Description', _descriptionController, 'What is this payment for?'),
+              _buildTextField('Description', _descriptionController,
+                  'What is this payment for?'),
               const SizedBox(height: 12),
-              _buildTextField('Department', _departmentController, 'e.g. Logistics'),
+              _buildTextField(
+                  'Department', _departmentController, 'e.g. Logistics'),
               const SizedBox(height: 12),
               _buildTextField(
                 'Amount',
@@ -603,7 +624,8 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
                 keyboardType: TextInputType.numberWithOptions(decimal: true),
               ),
               const SizedBox(height: 16),
-              Text('Type', style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
+              Text('Type',
+                  style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -637,6 +659,15 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
                 onTap: _isLoading ? null : _pickDateTime,
               ),
               const SizedBox(height: 20),
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10.0),
+                  child: Text(
+                    _errorMessage!,
+                    style: const TextStyle(
+                        color: Colors.red, fontWeight: FontWeight.bold),
+                  ),
+                ),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -652,7 +683,8 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
                       : const Text('Save Transaction'),
@@ -722,21 +754,67 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
     });
   }
 
-  Future<void> _saveTransaction() async {
-    final amount = double.tryParse(_amountController.text.trim());
+  double _toDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    return double.tryParse(value?.toString() ?? '') ?? 0.0;
+  }
 
-    if (_titleController.text.trim().isEmpty || amount == null || amount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a title and valid amount > 0')),
-      );
+  String _formatCurrency(double amount) {
+    final absolute = amount.abs().toStringAsFixed(2);
+    final parts = absolute.split('.');
+    final whole = parts[0];
+    final decimals = parts[1];
+    final buffer = StringBuffer();
+
+    for (var index = 0; index < whole.length; index++) {
+      final reversedIndex = whole.length - index;
+      buffer.write(whole[index]);
+      if (reversedIndex > 1 && reversedIndex % 3 == 1) {
+        buffer.write(',');
+      }
+    }
+
+    return '₱${buffer.toString()}.$decimals';
+  }
+
+  Future<void> _saveTransaction() async {
+    setState(() => _errorMessage = null);
+    final amount = double.tryParse(_amountController.text.trim());
+    final title = _titleController.text.trim();
+
+    if (title.isEmpty || amount == null || amount <= 0) {
+      setState(() {
+        _errorMessage = 'Enter a title and valid amount > 0';
+      });
       return;
+    }
+
+    final isExpense = _transactionType == 'expense';
+    final isBudgetAllocation =
+        title.toLowerCase().contains('budget allocation') ||
+            title.toLowerCase().contains('budget adjustment');
+
+    if (isExpense && !isBudgetAllocation) {
+      final openingBudget = _toDouble(widget.organization['budget']);
+      final transactionSum = widget.viewModel.currentBalance;
+      final totalAvailableBalance = openingBudget + transactionSum;
+
+      if (amount > totalAvailableBalance) {
+        setState(() {
+          _errorMessage =
+              "Insufficient Funds! Available: ₱${totalAvailableBalance.toStringAsFixed(2)}";
+        });
+        return;
+      }
     }
 
     setState(() => _isLoading = true);
 
     try {
       await widget.viewModel.createTransaction({
-        'title': _titleController.text.trim(),
+        'title': title,
         'description': _descriptionController.text.trim(),
         'department': _departmentController.text.trim(),
         'amount': amount,
@@ -753,23 +831,39 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Error: ${e.toString()}';
+      });
     }
   }
 
   String _formatDateTime(DateTime date) {
     final monthName = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
     ][date.month - 1];
-    
-    final hour = date.hour == 0 ? 12 : date.hour > 12 ? date.hour - 12 : date.hour;
+
+    final hour = date.hour == 0
+        ? 12
+        : date.hour > 12
+            ? date.hour - 12
+            : date.hour;
     final minute = date.minute.toString().padLeft(2, '0');
     final period = date.hour >= 12 ? 'PM' : 'AM';
-    
+
     return '$monthName ${date.day}, ${date.year} $hour:$minute $period';
   }
 }
+
+
