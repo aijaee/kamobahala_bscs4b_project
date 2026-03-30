@@ -29,9 +29,11 @@ class ProjectsViewModel extends ChangeNotifier {
     try {
       _projects = await _projectService.fetchProjects(orgId);
       _setLoading(false);
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to fetch projects: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
     }
   }
 
@@ -43,9 +45,11 @@ class ProjectsViewModel extends ChangeNotifier {
     try {
       _currentProject = await _projectService.fetchProject(projectId);
       _setLoading(false);
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to fetch project details: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
     }
   }
 
@@ -53,6 +57,7 @@ class ProjectsViewModel extends ChangeNotifier {
   Future<bool> createProject(Map<String, dynamic> projectData) async {
     if (_currentOrganizationId == null) {
       _errorMessage = 'No organization selected';
+      notifyListeners();
       return false;
     }
 
@@ -73,6 +78,7 @@ class ProjectsViewModel extends ChangeNotifier {
     } catch (e) {
       _errorMessage = 'Failed to create project: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
       return false;
     }
   }
@@ -105,6 +111,7 @@ class ProjectsViewModel extends ChangeNotifier {
       _errorMessage =
           'Failed to update project repository: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
       return false;
     }
   }
@@ -132,6 +139,7 @@ class ProjectsViewModel extends ChangeNotifier {
   Future<void> fetchCompletedProjects() async {
     if (_currentOrganizationId == null) {
       _errorMessage = 'No organization selected';
+      notifyListeners();
       return;
     }
 
@@ -142,9 +150,11 @@ class ProjectsViewModel extends ChangeNotifier {
       _completedProjects = await _projectService
           .fetchCompletedProjects(_currentOrganizationId!);
       _setLoading(false);
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to fetch completed projects: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
     }
   }
 
@@ -174,6 +184,7 @@ class ProjectsViewModel extends ChangeNotifier {
     } catch (e) {
       _errorMessage = 'Failed to update project: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
       return false;
     }
   }
@@ -200,6 +211,7 @@ class ProjectsViewModel extends ChangeNotifier {
     } catch (e) {
       _errorMessage = 'Failed to delete project: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
       return false;
     }
   }
@@ -230,9 +242,11 @@ class ProjectsViewModel extends ChangeNotifier {
       }
       
       _setLoading(false);
+      notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to fetch projects: ${e.toString()}';
       _setLoading(false);
+      notifyListeners();
     }
     return _projects;
   }

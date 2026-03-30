@@ -105,40 +105,45 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
     return Scaffold(
       backgroundColor: const Color(0xFFF6F7F8),
       appBar: _buildAppBar(context),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 100.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildMainProgressCard(),
-                const SizedBox(height: 20),
-                _buildFinancialHealthCard(),
-                const SizedBox(height: 24),
-                Text(
-                  "PROJECT SECTIONS",
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF617589),
-                    letterSpacing: 1.2,
+      body: RefreshIndicator(
+        onRefresh: _forceRefresh,
+        color: const Color(0xFF137FEC),
+        backgroundColor: Colors.white,
+        child: Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 100.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildMainProgressCard(),
+                  const SizedBox(height: 20),
+                  _buildFinancialHealthCard(),
+                  const SizedBox(height: 24),
+                  Text(
+                    "PROJECT SECTIONS",
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF617589),
+                      letterSpacing: 1.2,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                _buildProjectSections(context),
-                const SizedBox(height: 24),
-                _buildTaskListButton(context),
-              ],
+                  const SizedBox(height: 12),
+                  _buildProjectSections(context),
+                  const SizedBox(height: 24),
+                  _buildTaskListButton(context),
+                ],
+              ),
             ),
-          ),
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _buildBottomNav(context),
-          ),
-        ],
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: _buildBottomNav(context),
+            ),
+          ],
+        ),
       ),
     );
   }

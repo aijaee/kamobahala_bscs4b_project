@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'main_dashboard_screen.dart';
 import '../../core/services/admin_service.dart';
-import '../../core/services/auth_service.dart';
 import '../../core/services/organization_service.dart';
 
 const kPrimary = Color(0xFF1A73E8);
@@ -36,7 +35,6 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
   // TODO: [MVVM] manage members list in ViewModel instead of widget state when possible
   List<Map<String, dynamic>> members = [];
   List<String> _existingMemberEmails = [];
-  bool _isAdmin = false;
 
   @override
   void initState() {
@@ -52,14 +50,11 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
 
   Future<void> _checkAdminStatus() async {
     final isAdmin = await _adminService.isUserAdmin(widget.organization['id']);
-    if (mounted) {
-      setState(() => _isAdmin = isAdmin);
-      if (!isAdmin) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Only admins can edit organization settings')),
-        );
-      }
+    if (!isAdmin && mounted) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only admins can edit organization settings')),
+      );
     }
   }
 
@@ -277,13 +272,17 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
         ),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+        child: RefreshIndicator(
+          onRefresh: _loadExistingMembers,
+          color: const Color(0xFF137FEC),
+          backgroundColor: Colors.white,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 _label("Organization Name"),
                 TextFormField(
                   controller: nameController,
@@ -367,6 +366,7 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );

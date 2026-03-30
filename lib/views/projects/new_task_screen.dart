@@ -96,9 +96,9 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       'title': _taskNameController.text,
       'category': _selectedCategory ?? 'Uncategorized',
       'priority': _selectedPriority,
-      'assigned_to': _selectedAssignee,
+      'assignee': _selectedAssignee,
       'due_date': _selectedDueDate?.toIso8601String(),
-      'notes': _noteController.text,
+      'description': _noteController.text,
       'status': 'todo',
       'organization_id': widget.organizationId,
     };
