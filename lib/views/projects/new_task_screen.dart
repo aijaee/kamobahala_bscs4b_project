@@ -3,6 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kamobahala_bscs4b_project/viewmodels/tasks_viewmodel.dart';
 import 'package:kamobahala_bscs4b_project/core/services/organization_service.dart';
+import 'package:kamobahala_bscs4b_project/core/services/project_service.dart';
+import 'package:kamobahala_bscs4b_project/core/services/task_service.dart';
+import 'package:kamobahala_bscs4b_project/core/services/financial_service.dart';
 
 class NewTaskScreen extends StatefulWidget {
   final String projectId;
@@ -22,12 +25,12 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   bool _financialDetailsEnabled = true;
   bool _deductFromBudget = false;
   String _selectedPriority = "Low";
-  
+
   // Form controllers
   late TextEditingController _taskNameController;
   late TextEditingController _estimatedExpenseController;
   late TextEditingController _noteController;
-  
+
   // Selected values
   String? _selectedCategory;
   String? _selectedAssignee;
@@ -38,24 +41,80 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   bool _isLoadingData = true;
   String? _loadError;
 
+  // Budget-related state
+  double _projectBudget = 0.0;
+  double _trueProjectCeiling =
+      0.0; // Static ceiling - does not change based on user input
+  bool _isLoadingBudget = true;
+  String? _errorMessage;
+
   @override
   void initState() {
     super.initState();
     _taskNameController = TextEditingController();
     _estimatedExpenseController = TextEditingController();
     _noteController = TextEditingController();
+
+    _estimatedExpenseController.addListener(() {
+      if (_errorMessage != null) {
+        setState(() {
+          _errorMessage = null;
+        });
+      }
+    });
+
     _loadTeamData();
+    _loadProjectFinancials();
+  }
+
+  Future<void> _loadProjectFinancials() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingBudget = true;
+    });
+
+    try {
+      final projectService = ProjectService();
+      final project = await projectService.fetchProject(widget.projectId);
+      final allocatedBudget = (project['budget'] as num? ?? 0).toDouble();
+
+      final taskService = TaskService();
+      final projectTasks =
+          await taskService.fetchProjectTasks(widget.projectId);
+
+      double existingTasksExpenses = projectTasks.fold(0.0, (sum, task) {
+        if (task['deduct_from_budget'] == true) {
+          final taskExpense = (task['estimated_expense'] as num?) ?? 0;
+          return sum + taskExpense.toDouble();
+        }
+        return sum;
+      });
+
+      if (mounted) {
+        setState(() {
+          _projectBudget = allocatedBudget;
+          _trueProjectCeiling = allocatedBudget - existingTasksExpenses;
+          _isLoadingBudget = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingBudget = false;
+          _trueProjectCeiling = 0;
+        });
+      }
+    }
   }
 
   Future<void> _loadTeamData() async {
     try {
       final orgService = OrganizationService();
-      // Fetch team members for the organization
-      final response = await orgService.getOrganizationMembers(widget.organizationId);
-      
-      // Fetch categories (you may need to add this to organization service)
-      final categories = await orgService.getTaskCategories(widget.organizationId);
-      
+      final response =
+          await orgService.getOrganizationMembers(widget.organizationId);
+      final categories =
+          await orgService.getTaskCategories(widget.organizationId);
+
       setState(() {
         _teamMembers = response;
         _categories = categories.map((c) => c['name'] as String).toList();
@@ -85,11 +144,34 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   }
 
   Future<void> _saveTask() async {
+    // Clear previous error first
+    setState(() {
+      _errorMessage = null;
+    });
+
     if (_taskNameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a task name')),
       );
       return;
+    }
+
+    // CALCULATE THE "TRUE FIXED CEILING" (Pre-Input)
+    // Formula: fixedProjectCeiling = (Project_Total_Budget) - (Sum of ALL existing tasks)
+    // CRITICAL: Do NOT include the value from _estimatedExpenseController.text
+    final double fixedProjectCeiling =
+        (_trueProjectCeiling as num? ?? 0).toDouble();
+
+    // Get the user's input amount with proper type conversion
+    double userInput = double.tryParse(_estimatedExpenseController.text) ?? 0.0;
+
+    // THE "HARD STOP" GATEKEEPER: Block save if budget is exceeded
+    if (_deductFromBudget && userInput > fixedProjectCeiling) {
+      setState(() {
+        _errorMessage =
+            "INSUFFICIENT PROJECT BUDGET: You only have ₱${fixedProjectCeiling.toStringAsFixed(2)} left.";
+      });
+      return; // THIS KILLS THE FUNCTION. DO NOT PROCEED TO SAVE.
     }
 
     final taskData = <String, dynamic>{
@@ -101,24 +183,34 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       'description': _noteController.text,
       'status': 'todo',
       'organization_id': widget.organizationId,
+      'project_id': widget.projectId,
     };
 
     if (_financialDetailsEnabled) {
-      taskData['estimated_expense'] = double.tryParse(_estimatedExpenseController.text) ?? 0.0;
-      taskData['expense_category'] = _selectedExpenseCategory ?? 'Uncategorized';
+      taskData['estimated_expense'] =
+          double.tryParse(_estimatedExpenseController.text) ?? 0.0;
+      taskData['expense_category'] =
+          _selectedExpenseCategory ?? 'Uncategorized';
       taskData['deduct_from_budget'] = _deductFromBudget;
     }
 
     if (!mounted) return;
 
     final viewModel = Provider.of<TasksViewModel>(context, listen: false);
+
+    // Make sure ViewModel has the right project context
+    if (viewModel.currentProjectId != widget.projectId) {
+      await viewModel.fetchProjectTasks(widget.projectId);
+    }
+
     final success = await viewModel.createTask(taskData);
 
     if (success && mounted) {
       Navigator.pop(context);
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to create task')),
+        SnackBar(
+            content: Text(viewModel.errorMessage ?? 'Failed to create task')),
       );
     }
   }
@@ -152,6 +244,15 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             _buildGeneralInfoCard(),
             _buildSectionHeader("PRIORITY & TIMELINE"),
             _buildPriorityTimelineCard(),
+            if (_errorMessage != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Text(
+                  _errorMessage!,
+                  style: GoogleFonts.inter(color: Colors.red, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+              ),
             _buildSectionHeader("FINANCIAL DETAILS", hasSwitch: true),
             if (_financialDetailsEnabled) _buildFinancialDetailsCard(),
             const SizedBox(height: 12),
@@ -196,16 +297,22 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 16),
           child: Center(
-            child: GestureDetector(
-              onTap: _saveTask,
-              child: Text(
-                "Done",
-                style: GoogleFonts.inter(
-                  color: const Color(0xFF137FEC),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
+            child: Consumer<TasksViewModel>(
+              builder: (context, viewModel, child) {
+                return GestureDetector(
+                  onTap: viewModel.isLoading ? null : _saveTask,
+                  child: Text(
+                    viewModel.isLoading ? "Saving..." : "Done",
+                    style: GoogleFonts.inter(
+                      color: viewModel.isLoading
+                          ? Colors.grey
+                          : const Color(0xFF137FEC),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -234,7 +341,12 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
               child: Switch.adaptive(
                 value: _financialDetailsEnabled,
                 activeColor: const Color(0xFF137FEC),
-                onChanged: (val) => setState(() => _financialDetailsEnabled = val),
+                onChanged: (val) {
+                  setState(() => _financialDetailsEnabled = val);
+                  if (!_financialDetailsEnabled) {
+                    setState(() => _errorMessage = null);
+                  }
+                },
               ),
             ),
         ],
@@ -276,9 +388,9 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ..._categories.map((cat) => ListTile(
-                title: Text(cat),
-                onTap: () => Navigator.pop(context, cat),
-              )),
+                    title: Text(cat),
+                    onTap: () => Navigator.pop(context, cat),
+                  )),
               ListTile(
                 title: const Text('+ New Category'),
                 onTap: () => _showNewCategoryDialog(),
@@ -315,12 +427,11 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         ],
       ),
     );
-    
+
     if (result != null && result.isNotEmpty) {
-      // Save to database
       final orgService = OrganizationService();
       await orgService.createTaskCategory(widget.organizationId, result);
-      
+
       setState(() {
         if (!_categories.contains(result)) {
           _categories.add(result);
@@ -341,9 +452,9 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ..._categories.map((cat) => ListTile(
-                title: Text(cat),
-                onTap: () => Navigator.pop(context, cat),
-              )),
+                    title: Text(cat),
+                    onTap: () => Navigator.pop(context, cat),
+                  )),
               ListTile(
                 title: const Text('+ New Category'),
                 onTap: () => _showNewExpenseCategoryDialog(),
@@ -380,12 +491,11 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         ],
       ),
     );
-    
+
     if (result != null && result.isNotEmpty) {
-      // Save to database
       final orgService = OrganizationService();
       await orgService.createTaskCategory(widget.organizationId, result);
-      
+
       setState(() {
         if (!_categories.contains(result)) {
           _categories.add(result);
@@ -409,31 +519,43 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
-              children: ["Low", "Medium", "High"].map((p) => Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _selectedPriority = p),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: _selectedPriority == p ? Colors.white : const Color(0xFFF3F4F6),
-                      borderRadius: BorderRadius.circular(8),
-                      border: _selectedPriority == p ? Border.all(color: const Color(0xFFE5E7EB)) : null,
-                      boxShadow: _selectedPriority == p
-                          ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
-                          : null,
-                    ),
-                    child: Text(
-                      p,
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: _selectedPriority == p ? FontWeight.bold : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-              )).toList(),
+              children: ["Low", "Medium", "High"]
+                  .map((p) => Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _selectedPriority = p),
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 4),
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _selectedPriority == p
+                                  ? Colors.white
+                                  : const Color(0xFFF3F4F6),
+                              borderRadius: BorderRadius.circular(8),
+                              border: _selectedPriority == p
+                                  ? Border.all(color: const Color(0xFFE5E7EB))
+                                  : null,
+                              boxShadow: _selectedPriority == p
+                                  ? [
+                                      BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          blurRadius: 4)
+                                    ]
+                                  : null,
+                            ),
+                            child: Text(
+                              p,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: _selectedPriority == p
+                                    ? FontWeight.bold
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ))
+                  .toList(),
             ),
           ),
           GestureDetector(
@@ -471,11 +593,13 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: _teamMembers.map((member) => ListTile(
-              title: Text(member['email'] ?? 'Unknown'),
-              subtitle: Text(member['name'] ?? ''),
-              onTap: () => Navigator.pop(context, member['email']),
-            )).toList(),
+            children: _teamMembers
+                .map((member) => ListTile(
+                      title: Text(member['email'] ?? 'Unknown'),
+                      subtitle: Text(member['name'] ?? ''),
+                      onTap: () => Navigator.pop(context, member['email']),
+                    ))
+                .toList(),
           ),
         ),
       ),
@@ -510,18 +634,23 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                Text("Estimated Expense", style: GoogleFonts.inter(fontSize: 15)),
+                Text("Estimated Expense",
+                    style: GoogleFonts.inter(fontSize: 15)),
                 const Spacer(),
                 SizedBox(
                   width: 150,
                   child: TextField(
                     controller: _estimatedExpenseController,
                     textAlign: TextAlign.right,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
                       hintText: "0.00",
-                      hintStyle: GoogleFonts.inter(color: const Color(0xFFD1D5DB)),
-                      prefix: Text("₱ ", style: GoogleFonts.inter(fontSize: 15, color: Colors.black)),
+                      hintStyle:
+                          GoogleFonts.inter(color: const Color(0xFFD1D5DB)),
+                      prefix: Text("₱ ",
+                          style: GoogleFonts.inter(
+                              fontSize: 15, color: Colors.black)),
                       border: InputBorder.none,
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
@@ -534,7 +663,9 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
           const Divider(height: 1, indent: 16),
           GestureDetector(
             onTap: _showExpenseCategoryPicker,
-            child: _buildListTile("Category", _selectedExpenseCategory ?? "Uncategorized", true, valueColor: const Color(0xFF137FEC)),
+            child: _buildListTile(
+                "Category", _selectedExpenseCategory ?? "Uncategorized", true,
+                valueColor: const Color(0xFF137FEC)),
           ),
           const Divider(height: 1, indent: 16),
           Padding(
@@ -542,7 +673,8 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Deduct from Project Budget", style: GoogleFonts.inter(fontSize: 15)),
+                Text("Deduct from Project Budget",
+                    style: GoogleFonts.inter(fontSize: 15)),
                 Transform.scale(
                   scale: 0.8,
                   child: Switch.adaptive(
@@ -558,7 +690,8 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Text(
               "When enabled, the estimated expense will be automatically subtracted from the total remaining project balance.",
-              style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF9CA3AF), height: 1.4),
+              style: GoogleFonts.inter(
+                  fontSize: 12, color: const Color(0xFF9CA3AF), height: 1.4),
             ),
           )
         ],
@@ -587,11 +720,12 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   }
 
   Widget _buildBudgetAlert() {
+    // Display the STATIC project ceiling - does not change as user types
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF137FEC).withValues(alpha: 0.1),
+        color: const Color(0xFF137FEC).withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -604,7 +738,9 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Project Budget: P12,450.00 remaining",
+                  _isLoadingBudget
+                      ? "Project Budget: Loading..."
+                      : "Project Budget: ₱${_trueProjectCeiling.toStringAsFixed(2)} remaining",
                   style: GoogleFonts.inter(
                     color: const Color(0xFF137FEC),
                     fontWeight: FontWeight.bold,
@@ -615,7 +751,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                 Text(
                   "This task will reduce the budget by the estimated amount if marked.",
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF137FEC).withValues(alpha: 0.7),
+                    color: const Color(0xFF137FEC).withOpacity(0.7),
                     fontSize: 12,
                   ),
                 ),
@@ -627,7 +763,10 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
     );
   }
 
-  Widget _buildTextField(String label, {TextEditingController? controller, String? trailing, bool isNumeric = false}) {
+  Widget _buildTextField(String label,
+      {TextEditingController? controller,
+      String? trailing,
+      bool isNumeric = false}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -635,14 +774,18 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
           Text(label, style: GoogleFonts.inter(fontSize: 15)),
           const Spacer(),
           if (trailing != null)
-            Text(trailing, style: GoogleFonts.inter(fontSize: 15, color: const Color(0xFF137FEC))),
+            Text(trailing,
+                style: GoogleFonts.inter(
+                    fontSize: 15, color: const Color(0xFF137FEC))),
           if (trailing == null && controller != null)
             SizedBox(
               width: 150,
               child: TextField(
                 controller: controller,
                 textAlign: TextAlign.right,
-                keyboardType: isNumeric ? TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+                keyboardType: isNumeric
+                    ? const TextInputType.numberWithOptions(decimal: true)
+                    : TextInputType.text,
                 decoration: InputDecoration(
                   hintText: label,
                   hintStyle: GoogleFonts.inter(color: const Color(0xFFD1D5DB)),

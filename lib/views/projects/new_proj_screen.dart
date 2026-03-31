@@ -294,10 +294,23 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   Future<void> _handleCreateProject(BuildContext context, ProjectsViewModel viewModel) async {
     if (!_formKey.currentState!.validate()) return;
 
+    final inputBudget = _toDouble(budgetController.text);
+    final availableBalance = _calculateDepositoryBalance();
+
+    if (inputBudget > availableBalance) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Insufficient Organization Funds! Available: ₱${availableBalance.toStringAsFixed(2)}'),
+          backgroundColor: kRed,
+        ),
+      );
+      return;
+    }
+
     final projectData = {
       'name': nameController.text,
       'description': descriptionController.text,
-      'budget': double.tryParse(budgetController.text) ?? 0,
+      'budget': inputBudget,
       'start_date': startDate?.toIso8601String(),
       'due_date': endDate?.toIso8601String(),
       'status': 'active',

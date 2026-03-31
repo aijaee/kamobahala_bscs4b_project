@@ -146,6 +146,35 @@ class FinancialViewModel extends ChangeNotifier {
     );
   }
 
+  /// Calculate available balance excluding internal transfers (budget allocations/adjustments).
+  /// Formula: openingBudget + (Income - Expenses)
+  /// This is the true available balance for budget allocation decisions.
+  double calculateAvailableBalance(double openingBudget) {
+    double totalIncome = 0;
+    double totalExpenses = 0;
+
+    for (final transaction in _transactions) {
+      final title = (transaction['title'] ?? '').toString().toLowerCase();
+      final isInternalTransfer = title.contains('budget allocation') ||
+          title.contains('budget adjustment');
+
+      if (!isInternalTransfer) {
+        final amount = _toDouble(transaction['amount']).abs();
+        final type = (transaction['transaction_type'] ?? 'expense')
+            .toString()
+            .toLowerCase();
+
+        if (type == 'income') {
+          totalIncome += amount;
+        } else {
+          totalExpenses += amount;
+        }
+      }
+    }
+
+    return (openingBudget as num).toDouble() + totalIncome - totalExpenses;
+  }
+
   double getSignedAmount(Map<String, dynamic> transaction) {
     final amount = _toDouble(transaction['amount']).abs();
     final type =
