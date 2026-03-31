@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:kamobahala_bscs4b_project/viewmodels/financial_viewmodel.dart';
 import 'projects_list.dart';
 import '../../viewmodels/projects_viewmodel.dart';
 
@@ -17,7 +18,8 @@ const kRed = Color(0xFFE53935);
 class EditProjectScreen extends StatefulWidget {
   final String projectId;
   final Map<String, dynamic> organization;
-  const EditProjectScreen({super.key, required this.projectId, required this.organization});
+  const EditProjectScreen(
+      {super.key, required this.projectId, required this.organization});
 
   @override
   State<EditProjectScreen> createState() => _EditProjectScreenState();
@@ -25,21 +27,24 @@ class EditProjectScreen extends StatefulWidget {
 
 class _EditProjectScreenState extends State<EditProjectScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+
   final TextEditingController nameController = TextEditingController();
   final TextEditingController descriptionController = TextEditingController();
   final TextEditingController budgetController = TextEditingController();
 
   DateTime? startDate;
   DateTime? endDate;
+  String? _validationError;
 
   @override
   void initState() {
     super.initState();
     // Load project data from ViewModel
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final viewModel = context.read<ProjectsViewModel>();
-      viewModel.fetchProject(widget.projectId);
+      context.read<ProjectsViewModel>().fetchProject(widget.projectId);
+      context
+          .read<FinancialViewModel>()
+          .fetchTransactions(widget.organization['id']);
     });
   }
 
@@ -141,20 +146,43 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     return "${_monthAbbr(date.month)} ${date.day}, ${date.year}";
   }
 
+  double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
   String _monthAbbr(int month) {
     const months = [
-      "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec"
     ];
     return months[month - 1];
+  }
+
+  /// Get the true available balance from the FinancialViewModel.
+  /// This is the single source of truth for all balance calculations.
+  double _getAvailableBalance() {
+    final financialViewModel =
+        Provider.of<FinancialViewModel>(context, listen: false);
+    final openingBudget = _toDouble(widget.organization['budget']);
+    return financialViewModel.calculateAvailableBalance(openingBudget);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kSurface,
-
-      // ── AppBar ──────────────────────────────────────────────────────────────
       appBar: AppBar(
         backgroundColor: kCardBg,
         elevation: 0,
@@ -163,7 +191,9 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
           icon: const Icon(Icons.close, color: kRed),
           onPressed: () => Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization)),
+            MaterialPageRoute(
+                builder: (_) => ProjectsList(
+                    initialIndex: 1, organization: widget.organization)),
           ),
         ),
         title: Text(
@@ -179,14 +209,12 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
           child: Divider(height: 1, color: kBorder),
         ),
       ),
-
       body: Consumer<ProjectsViewModel>(
         builder: (context, viewModel, _) {
           if (viewModel.isLoading && viewModel.currentProject == null) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Initialize form when project is loaded
           if (viewModel.currentProject != null && nameController.text.isEmpty) {
             _initializeForm(viewModel.currentProject!);
           }
@@ -199,45 +227,34 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-
-                    // ── Project Name ─────────────────────────────────────────────
                     _label("Project Name"),
                     TextFormField(
                       controller: nameController,
-                      style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
-                      decoration: _inputDecoration("e.g. Q4 Marketing Campaign"),
+                      style:
+                          GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
+                      decoration:
+                          _inputDecoration("e.g. Q4 Marketing Campaign"),
                       validator: (value) {
-                        if (value == null || value.isEmpty) {
+                        if (value == null || value.isEmpty)
                           return "Project name is required";
-                        }
                         return null;
                       },
                     ),
-
                     const SizedBox(height: 18),
-
-                    // ── Description ──────────────────────────────────────────────
                     _label("Description"),
                     TextFormField(
                       controller: descriptionController,
                       maxLines: 4,
-                      style: GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
-                      decoration: _inputDecoration("Outline project goals and deliverables..."),
+                      style:
+                          GoogleFonts.inter(fontSize: 14, color: kTextPrimary),
+                      decoration: _inputDecoration(
+                          "Outline project goals and deliverables..."),
                     ),
-
                     const SizedBox(height: 18),
-
-                    // ── Project Timeline ─────────────────────────────────────────
                     _buildTimelineCard(),
-
                     const SizedBox(height: 14),
-
-                    // ── Budget Allocation ────────────────────────────────────────
-                    _buildBudgetCard(),
-
+                    _buildBudgetCard(viewModel.currentProject),
                     const SizedBox(height: 32),
-
-                    // ── Save Changes Button ──────────────────────────────────────
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -246,8 +263,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                              borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
                         onPressed: viewModel.isLoading
@@ -256,17 +272,13 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                         child: Text(
                           viewModel.isLoading ? "Saving..." : "Save Changes",
                           style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
-                          ),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2),
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 16),
-
-                    // ── Delete Project Button ────────────────────────────────────
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -275,24 +287,23 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                              borderRadius: BorderRadius.circular(12)),
                           padding: const EdgeInsets.symmetric(vertical: 15),
                         ),
                         onPressed: viewModel.isLoading
                             ? null
                             : () => _handleDeleteProject(viewModel),
                         child: Text(
-                          viewModel.isLoading ? "Deleting..." : "Delete Project",
+                          viewModel.isLoading
+                              ? "Deleting..."
+                              : "Delete Project",
                           style: GoogleFonts.inter(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
-                          ),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.2),
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 16),
                   ],
                 ),
@@ -304,16 +315,37 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     );
   }
 
-  Future<void> _handleSaveProject(BuildContext context, ProjectsViewModel viewModel) async {
+  Future<void> _handleSaveProject(
+      BuildContext context, ProjectsViewModel viewModel) async {
+    // Reset validation error at the start
+    setState(() {
+      _validationError = null;
+    });
+
     if (!_formKey.currentState!.validate()) return;
+
+    // Calculate the maximum allowable budget using the unified balance from FinancialViewModel
+    final globalAvailableBalance = _getAvailableBalance();
+    final existingProjectBudget =
+        (viewModel.currentProject?['budget'] as num).toDouble();
+    final maxAllowableBudget = globalAvailableBalance + existingProjectBudget;
+    final newBudget = _toDouble(budgetController.text);
+
+    // Validate: prevent save if new budget exceeds available funds
+    if (newBudget > maxAllowableBudget) {
+      setState(() {
+        _validationError =
+            'Insufficient Funds! Available in Depository: ₱${globalAvailableBalance.toStringAsFixed(2)}';
+      });
+      return;
+    }
 
     final updates = {
       'name': nameController.text,
       'description': descriptionController.text,
-      'budget': double.tryParse(budgetController.text) ?? 0,
+      'budget': newBudget,
       'start_date': startDate?.toIso8601String(),
       'due_date': endDate?.toIso8601String(),
-      'status': 'active',
     };
 
     final success = await viewModel.updateProject(widget.projectId, updates);
@@ -326,18 +358,19 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization),
-        ),
+            builder: (_) => ProjectsList(
+                initialIndex: 1, organization: widget.organization)),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to update project')),
+        SnackBar(
+            content:
+                Text(viewModel.errorMessage ?? 'Failed to update project')),
       );
     }
   }
 
   Future<void> _handleDeleteProject(ProjectsViewModel viewModel) async {
-    // Show confirmation dialog
     if (!mounted) return;
     showDialog(
       context: context,
@@ -345,68 +378,55 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           backgroundColor: kCardBg,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          title: Text(
-            'Delete Project?',
-            style: GoogleFonts.inter(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: kTextPrimary,
-            ),
-          ),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: Text('Delete Project?',
+              style: GoogleFonts.inter(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: kTextPrimary)),
           content: Text(
-            'Are you sure you want to delete this project? This action cannot be undone.',
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: kTextSecondary,
-            ),
-          ),
+              'Are you sure you want to delete this project? This action cannot be undone.',
+              style: GoogleFonts.inter(fontSize: 14, color: kTextSecondary)),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: kPrimary,
-                ),
-              ),
+              child: Text('Cancel',
+                  style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: kPrimary)),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
-                backgroundColor: kRed,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
+                  backgroundColor: kRed,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8))),
               onPressed: () async {
                 Navigator.of(dialogContext).pop();
                 final success = await viewModel.deleteProject(widget.projectId);
                 if (!mounted) return;
 
                 if (success) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Project deleted successfully')),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Project deleted successfully')));
                   Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization),
-                    ),
-                  );
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => ProjectsList(
+                              initialIndex: 1,
+                              organization: widget.organization)));
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to delete project')),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(viewModel.errorMessage ??
+                          'Failed to delete project')));
                 }
               },
-              child: Text(
-                'Delete',
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                ),
-              ),
+              child: Text('Delete',
+                  style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white)),
             ),
           ],
         );
@@ -414,34 +434,29 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     );
   }
 
-  // ── Project Timeline Card ────────────────────────────────────────────────────
   Widget _buildTimelineCard() {
     return Container(
       decoration: BoxDecoration(
-        color: kCardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kBorder),
-      ),
+          color: kCardBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: kBorder)),
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "Project Timeline",
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: kTextPrimary,
-            ),
-          ),
+          Text("Project Timeline",
+              style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: kTextPrimary)),
           const SizedBox(height: 14),
           Row(
             children: [
-              // Start Date
-              Expanded(child: _buildDateField(label: "START DATE", isStart: true)),
+              Expanded(
+                  child: _buildDateField(label: "START DATE", isStart: true)),
               const SizedBox(width: 12),
-              // End Date
-              Expanded(child: _buildDateField(label: "END DATE", isStart: false)),
+              Expanded(
+                  child: _buildDateField(label: "END DATE", isStart: false)),
             ],
           ),
         ],
@@ -456,15 +471,12 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: kTextSecondary,
-            letterSpacing: 0.8,
-          ),
-        ),
+        Text(label,
+            style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: kTextSecondary,
+                letterSpacing: 0.8)),
         const SizedBox(height: 6),
         InkWell(
           onTap: () => _pickDate(isStart: isStart),
@@ -472,26 +484,19 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             decoration: BoxDecoration(
-              color: kSurface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: kBorder),
-            ),
+                color: kSurface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: kBorder)),
             child: Row(
               children: [
-                Icon(
-                  Icons.calendar_today_outlined,
-                  size: 15,
-                  color: isPlaceholder ? kTextSecondary : kPrimary,
-                ),
+                Icon(Icons.calendar_today_outlined,
+                    size: 15, color: isPlaceholder ? kTextSecondary : kPrimary),
                 const SizedBox(width: 6),
-                Text(
-                  _formatDate(date),
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: isPlaceholder ? kTextSecondary : kTextPrimary,
-                  ),
-                ),
+                Text(_formatDate(date),
+                    style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: isPlaceholder ? kTextSecondary : kTextPrimary)),
               ],
             ),
           ),
@@ -500,72 +505,55 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     );
   }
 
-  // ── Budget Allocation Card ───────────────────────────────────────────────────
-  Widget _buildBudgetCard() {
+  Widget _buildBudgetCard(Map<String, dynamic>? project) {
     return Container(
       decoration: BoxDecoration(
-        color: kCardBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: kBorder),
-      ),
+          color: kCardBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: kBorder)),
       padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
           Row(
             children: [
               const Icon(Icons.account_balance, size: 18, color: kPrimary),
               const SizedBox(width: 8),
-              Text(
-                "Budget Allocation",
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: kTextPrimary,
-                ),
-              ),
+              Text("Budget Allocation",
+                  style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: kTextPrimary)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: kPrimary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  "LINKED TO DEPOSITORY",
-                  style: GoogleFonts.inter(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: kPrimary,
-                    letterSpacing: 0.4,
-                  ),
-                ),
+                    color: kPrimary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20)),
+                child: Text("LINKED TO DEPOSITORY",
+                    style: GoogleFonts.inter(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        color: kPrimary,
+                        letterSpacing: 0.4)),
               ),
             ],
           ),
-
           const SizedBox(height: 12),
-
-          // Amount input
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: kCardBg,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: kBorder),
-            ),
+                color: kCardBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: kBorder)),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  "₱",
-                  style: GoogleFonts.inter(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w500,
-                    color: kTextPrimary,
-                  ),
-                ),
+                Text("₱",
+                    style: GoogleFonts.inter(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w500,
+                        color: kTextPrimary)),
                 const SizedBox(width: 6),
                 Expanded(
                   child: TextFormField(
@@ -573,17 +561,15 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                     keyboardType:
                         const TextInputType.numberWithOptions(decimal: true),
                     style: GoogleFonts.inter(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w500,
-                      color: kTextPrimary,
-                    ),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w500,
+                        color: kTextPrimary),
                     decoration: InputDecoration(
                       hintText: "0.00",
                       hintStyle: GoogleFonts.inter(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w500,
-                        color: kTextSecondary,
-                      ),
+                          fontSize: 22,
+                          fontWeight: FontWeight.w500,
+                          color: kTextSecondary),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
@@ -595,36 +581,42 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 10),
-
           Text(
-            "Central Depository Balance",
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: kTextSecondary,
-            ),
-          ),
+              "${widget.organization['name'] ?? 'Organization'} Depository Balance",
+              style: GoogleFonts.inter(fontSize: 12, color: kTextSecondary)),
           const SizedBox(height: 4),
-          Text(
-            "₱${widget.organization['budget']?.toString() ?? '0.00'}",
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: kTextPrimary,
-            ),
+          Consumer<FinancialViewModel>(
+            builder: (context, financialViewModel, _) {
+              // Display the actual organization depository balance (not inflated by project budget)
+              final globalAvailableBalance = _getAvailableBalance();
+              return Text(
+                "Available to Allocate: ₱${globalAvailableBalance.toStringAsFixed(2)}",
+                style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: kTextPrimary),
+              );
+            },
           ),
           const SizedBox(height: 10),
+          if (_validationError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                _validationError!,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: kRed,
+                ),
+              ),
+            ),
           Divider(color: kBorder, height: 1),
           const SizedBox(height: 10),
-
           Text(
-            "Funds will be locked upon project creation.",
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              color: kTextSecondary,
-            ),
-          ),
+              "Changing the budget will create a new transaction in the financial depository.",
+              style: GoogleFonts.inter(fontSize: 11, color: kTextSecondary)),
         ],
       ),
     );
