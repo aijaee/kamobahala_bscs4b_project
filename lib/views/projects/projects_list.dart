@@ -8,6 +8,7 @@ import '../../viewmodels/organization_dashboard_viewmodel.dart';
 import '../../viewmodels/projects_viewmodel.dart';
 import '../../core/services/admin_service.dart';
 import '../dashboard/financial_ledger.dart';
+import '../profile/profile_screen.dart';
 import 'new_proj_screen.dart';
 import 'project_overview.dart';
 import 'edit_proj_screen.dart';
@@ -15,8 +16,13 @@ import 'edit_proj_screen.dart';
 class ProjectsList extends StatefulWidget {
   final int initialIndex;
   final Map<String, dynamic> organization;
-  const ProjectsList(
-      {super.key, this.initialIndex = 1, required this.organization});
+  final Function(int)? onTabChange;
+  const ProjectsList({
+    super.key,
+    this.initialIndex = 1,
+    required this.organization,
+    this.onTabChange,
+  });
 
   @override
   State<ProjectsList> createState() => _ProjectsListState();
@@ -81,9 +87,13 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
     final uniqueDepartments = <String>{};
     
     for (var project in projectsViewModel.projects) {
-      final department = project['department'] as String?;
-      if (department != null && department.isNotEmpty) {
-        uniqueDepartments.add(department);
+      // Only include active/ongoing projects in tabs, exclude completed
+      final status = (project['status'] ?? 'active').toString().toLowerCase();
+      if (status != 'completed') {
+        final department = project['department'] as String?;
+        if (department != null && department.isNotEmpty) {
+          uniqueDepartments.add(department);
+        }
       }
     }
 
@@ -130,6 +140,12 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
   List<Map<String, dynamic>> _getFilteredProjects(
       List<Map<String, dynamic>> projects) {
     return projects.where((project) {
+      // Only include active/ongoing projects, exclude completed ones
+      final status = (project['status'] ?? 'active').toString().toLowerCase();
+      if (status == 'completed') {
+        return false; // Skip completed projects
+      }
+
       final matchesSearch = _searchQuery.isEmpty ||
           project['name']
               .toString()
@@ -145,84 +161,7 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F8),
-      floatingActionButton: _isAdmin
-          ? FloatingActionButton(
-              backgroundColor: const Color(0xFF137FEC),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CreateProjectScreen(organization: widget.organization),
-                  ),
-                );
-              },
-              child: const Icon(Icons.add, color: Colors.white),
-            )
-          : null,
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-        decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
-        child: BottomNavigationBar(
-          currentIndex: currentIndex,
-          selectedItemColor: const Color(0xFF137FEC),
-          unselectedItemColor: const Color(0xFF9CA3AF),
-          onTap: (idx) {
-            if (idx == 0) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      OrganizationDashboard(organization: widget.organization),
-                ),
-              );
-            } else if (idx == 2) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                    builder: (_) => FinancialLedgerScreen(
-                        initialIndex: 2, organization: widget.organization)),
-              );
-            } else if (idx == 3) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Profile screen coming soon..."),
-                ),
-              );
-            } else {
-              setState(() {
-                currentIndex = idx;
-              });
-            }
-          },
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          showUnselectedLabels: true,
-          selectedFontSize: 10,
-          unselectedFontSize: 10,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.grid_view_rounded),
-              label: "Dashboard",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.assignment_outlined),
-              label: "Projects",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.account_balance_wallet_outlined),
-              label: "Finances",
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              label: "Profile",
-            ),
-          ],
-        ),
-      ),
-      body: Consumer<ProjectsViewModel>(
+    return Consumer<ProjectsViewModel>(
         builder: (context, projectsViewModel, _) {
           return Consumer<FinancialViewModel>(
             builder: (context, financialViewModel, _) {
@@ -333,8 +272,7 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
             },
           );
         },
-      ),
-    );
+      );
   }
 
   /// HEADER
@@ -369,6 +307,16 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                 decoration: InputDecoration(
                     hintText: "Search projects, teams, or tasks…",
                     prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              setState(() {
+                                _searchQuery = "";
+                              });
+                            },
+                          )
+                        : null,
                     filled: true,
                     fillColor: const Color(0xFFE5E7EB),
                     border: OutlineInputBorder(

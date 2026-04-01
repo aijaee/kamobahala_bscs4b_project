@@ -8,6 +8,7 @@ import 'task_list_screen.dart';
 import 'edit_proj_screen.dart';
 import '../../viewmodels/tasks_viewmodel.dart';
 import '../../viewmodels/financial_viewmodel.dart';
+import '../../viewmodels/projects_viewmodel.dart';
 import '../../core/services/admin_service.dart';
 
 class ProjectOverviewScreen extends StatefulWidget {
@@ -39,6 +40,135 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
     WidgetsBinding.instance.addObserver(this);
     _loadProjectData();
     _checkAdminStatus();
+  }
+
+  Future<void> _markProjectAsComplete() async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Mark Project Complete'),
+          content: Text(
+            'Are you sure you want to mark "${widget.project?['name'] ?? 'this project'}" as completed? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF137FEC),
+              ),
+              child: const Text('Mark Complete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || widget.project == null || widget.project!['id'] == null) return;
+
+    try {
+      final projectsVM = context.read<ProjectsViewModel>();
+      final tasksVM = context.read<TasksViewModel>();
+      final financialVM = context.read<FinancialViewModel>();
+      final projectId = widget.project!['id'];
+      final organizationId = widget.organization['id'];
+      
+      // Calculate total income and expense from completed tasks
+      double totalIncome = 0.0;
+      double totalExpense = 0.0;
+      
+      for (final task in tasksVM.tasks) {
+        final taskProjectId = task['project_id'];
+        final estimatedAmount = (task['estimated_expense'] as num?)?.toDouble() ?? 0.0;
+        final deductFromBudget = task['deduct_from_budget'] ?? false;
+        final status = (task['status'] ?? '').toString().toLowerCase();
+        
+        // Count all completed tasks in this project
+        if (taskProjectId == projectId && status == 'completed' && estimatedAmount > 0) {
+          if (deductFromBudget) {
+            totalExpense += estimatedAmount;
+          } else {
+            totalIncome += estimatedAmount;
+          }
+        }
+      }
+      
+      final netAmount = totalIncome - totalExpense;
+      
+      print('Project completion: Income=$totalIncome, Expense=$totalExpense, Net=$netAmount');
+      
+      // Update project status to completed
+      final success = await projectsVM.updateProject(
+        projectId,
+        {'status': 'completed'},
+      );
+
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to mark project as complete')),
+          );
+        }
+        return;
+      }
+
+      // Record the project completion transaction and update depository
+      if (organizationId != null) {
+        try {
+          financialVM.setCurrentOrganization(organizationId);
+          
+          // Create financial transaction for project completion
+          await financialVM.createTransaction({
+            'title': 'Project Completed: ${widget.project?['name']}',
+            'transaction_type': netAmount >= 0 ? 'income' : 'expense',
+            'amount': netAmount.abs(),
+            'category': 'Project Completion',
+            'department': 'Projects',
+            'description': 'Project completion net adjustment (Income: ₱$totalIncome - Expense: ₱$totalExpense)',
+            'project_id': projectId,
+            'occurred_at': DateTime.now().toIso8601String(),
+          });
+          
+          print('Transaction recorded for project completion');
+          
+          // Refresh financial data
+          await financialVM.fetchTransactions(organizationId);
+          
+          print('Depository updated with net amount: $netAmount');
+        } catch (e) {
+          print('Error recording project completion transaction: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Note: Project completed, but could not update depository: $e')),
+            );
+            return;
+          }
+        }
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Project "${widget.project?['name']}" marked as completed (Net: ₱${netAmount.toStringAsFixed(2)})')),
+      );
+      // Navigate back after a short delay
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+      print('Error marking project as complete: $e');
+    }
   }
 
   Future<void> _checkAdminStatus() async {
@@ -79,14 +209,6 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Refresh data when returning from task list
-    if (state == AppLifecycleState.resumed) {
-      _loadProjectData();
-    }
   }
 
   @override
@@ -270,23 +392,51 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
       centerTitle: true,
       actions: [
         if (_isAdmin)
-          IconButton(
-            icon: const Icon(Icons.edit, color: Colors.black),
-            onPressed: () {
-              if (widget.project != null && widget.project!['id'] != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => EditProjectScreen(
-                      projectId: widget.project!['id'],
-                      organization: widget.organization,
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.black),
+            onSelected: (value) {
+              if (value == 'edit') {
+                if (widget.project != null && widget.project!['id'] != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditProjectScreen(
+                        projectId: widget.project!['id'],
+                        organization: widget.organization,
+                      ),
                     ),
-                  ),
-                ).then((_) {
-                  // Refresh project data when returning from edit
-                  _loadProjectData();
-                });
+                  ).then((_) {
+                    // Refresh project data when returning from edit
+                    _loadProjectData();
+                  });
+                }
+              } else if (value == 'complete') {
+                _markProjectAsComplete();
               }
+            },
+            itemBuilder: (BuildContext context) {
+              return [
+                const PopupMenuItem<String>(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit, size: 18),
+                      SizedBox(width: 8),
+                      Text('Edit Project'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'complete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle_outline, size: 18, color: Color(0xFF137FEC)),
+                      SizedBox(width: 8),
+                      Text('Mark Complete'),
+                    ],
+                  ),
+                ),
+              ];
             },
           ),
       ],
@@ -370,22 +520,29 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
   }
 
   Widget _buildFinancialHealthCard() {
-    return Consumer<FinancialViewModel>(
-      builder: (context, financialVM, _) {
+    return Consumer2<FinancialViewModel, TasksViewModel>(
+      builder: (context, financialVM, tasksVM, _) {
         final projectBudget = (widget.project?['budget'] as num?)?.toDouble() ?? 0.0;
         final projectId = widget.project?['id'];
         
-        // Calculate budget utilized from transactions related to this project
+        // Calculate budget utilized and income from COMPLETED TASKS (not transactions)
         double budgetUtilized = 0.0;
+        double projectIncome = 0.0;
+        
         if (projectId != null) {
-          for (final transaction in financialVM.transactions) {
-            final txnProjectId = transaction['project_id'];
-            final amount = (transaction['amount'] as num?)?.toDouble() ?? 0.0;
-            // Match by project_id and filter for task expenses (title starts with 'Task:')
-            if (txnProjectId == projectId && 
-                (transaction['transaction_type'] ?? '').toString().toLowerCase() == 'expense' &&
-                (transaction['title'] ?? '').toString().startsWith('Task:')) {
-              budgetUtilized += amount;
+          for (final task in tasksVM.tasks) {
+            final taskProjectId = task['project_id'];
+            final estimatedExpense = (task['estimated_expense'] as num?)?.toDouble() ?? 0.0;
+            final deductFromBudget = task['deduct_from_budget'] ?? false;
+            final status = (task['status'] ?? '').toString().toLowerCase();
+            
+            // Only count completed tasks
+            if (taskProjectId == projectId && status == 'completed' && estimatedExpense > 0) {
+              if (deductFromBudget) {
+                budgetUtilized += estimatedExpense;
+              } else {
+                projectIncome += estimatedExpense;
+              }
             }
           }
         }
@@ -456,6 +613,20 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
               Text(
                 "Estimated completion cost: ₱${estimatedTotal.toStringAsFixed(2)}",
                 style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF9CA3AF)),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Income Made", style: GoogleFonts.inter(color: const Color(0xFF617589))),
+                  Text(
+                    "₱${projectIncome.toStringAsFixed(2)}",
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.bold,
+                      color: projectIncome > 0 ? const Color(0xFF10B981) : const Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

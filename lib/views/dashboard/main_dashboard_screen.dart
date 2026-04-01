@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/organization_service.dart';
-import 'organization_dashboard.dart';
+import 'main_navigation_wrapper.dart';
 import '../auth/login_screen.dart';
 import 'create_organization_screen.dart';
 import 'edit_organization_screen.dart';
@@ -282,7 +282,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => OrganizationDashboard(organization: org),
+              builder: (_) => MainNavigationWrapper(organization: org, initialIndex: 0),
             ),
           );
         },

@@ -300,7 +300,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     if (inputBudget > availableBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Insufficient Organization Funds! Available: ₱${availableBalance.toStringAsFixed(2)}'),
+          content: Text('INSUFFICIENT DEPOSITORY BALANCE: Available in depository is only ₱${availableBalance.toStringAsFixed(2)}.'),
           backgroundColor: kRed,
         ),
       );

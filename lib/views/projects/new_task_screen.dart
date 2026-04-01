@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kamobahala_bscs4b_project/viewmodels/tasks_viewmodel.dart';
+import 'package:kamobahala_bscs4b_project/viewmodels/financial_viewmodel.dart';
 import 'package:kamobahala_bscs4b_project/core/services/organization_service.dart';
 import 'package:kamobahala_bscs4b_project/core/services/project_service.dart';
 import 'package:kamobahala_bscs4b_project/core/services/task_service.dart';
-import 'package:kamobahala_bscs4b_project/core/services/financial_service.dart';
 
 class NewTaskScreen extends StatefulWidget {
   final String projectId;
@@ -34,6 +34,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   // Selected values
   String? _selectedCategory;
   String? _selectedAssignee;
+  String? _selectedAssigneeFullName;
   String? _selectedExpenseCategory;
   DateTime? _selectedDueDate;
   List<String> _categories = [];
@@ -45,8 +46,8 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   double _projectBudget = 0.0;
   double _trueProjectCeiling =
       0.0; // Static ceiling - does not change based on user input
+  double _depositoryBalance = 0.0; // Depository balance for validation
   bool _isLoadingBudget = true;
-  String? _errorMessage;
 
   @override
   void initState() {
@@ -54,14 +55,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
     _taskNameController = TextEditingController();
     _estimatedExpenseController = TextEditingController();
     _noteController = TextEditingController();
-
-    _estimatedExpenseController.addListener(() {
-      if (_errorMessage != null) {
-        setState(() {
-          _errorMessage = null;
-        });
-      }
-    });
 
     _loadTeamData();
     _loadProjectFinancials();
@@ -90,10 +83,16 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         return sum;
       });
 
+      // Fetch depository balance from FinancialViewModel
+      final financialVM = context.read<FinancialViewModel>();
+      final openingBudget = 0.0; // Will be fetched from organization
+      final depositoryBalance = financialVM.calculateAvailableBalance(openingBudget);
+
       if (mounted) {
         setState(() {
           _projectBudget = allocatedBudget;
           _trueProjectCeiling = allocatedBudget - existingTasksExpenses;
+          _depositoryBalance = depositoryBalance;
           _isLoadingBudget = false;
         });
       }
@@ -124,6 +123,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         }
         if (_teamMembers.isNotEmpty) {
           _selectedAssignee = _teamMembers.first['email'];
+          _selectedAssigneeFullName = _teamMembers.first['name'];
         }
         _isLoadingData = false;
       });
@@ -144,11 +144,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   }
 
   Future<void> _saveTask() async {
-    // Clear previous error first
-    setState(() {
-      _errorMessage = null;
-    });
-
     if (_taskNameController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a task name')),
@@ -165,12 +160,33 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
     // Get the user's input amount with proper type conversion
     double userInput = double.tryParse(_estimatedExpenseController.text) ?? 0.0;
 
-    // THE "HARD STOP" GATEKEEPER: Block save if budget is exceeded
+    // Check 1: Block save if project budget is exceeded
     if (_deductFromBudget && userInput > fixedProjectCeiling) {
-      setState(() {
-        _errorMessage =
-            "INSUFFICIENT PROJECT BUDGET: You only have ₱${fixedProjectCeiling.toStringAsFixed(2)} left.";
-      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'INSUFFICIENT PROJECT BUDGET: You only have ₱${fixedProjectCeiling.toStringAsFixed(2)} left.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return; // THIS KILLS THE FUNCTION. DO NOT PROCEED TO SAVE.
+    }
+
+    // Check 2: Block save if depository balance is exceeded
+    if (_deductFromBudget && userInput > _depositoryBalance) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'INSUFFICIENT DEPOSITORY BALANCE: Available in depository is only ₱${_depositoryBalance.toStringAsFixed(2)}.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return; // THIS KILLS THE FUNCTION. DO NOT PROCEED TO SAVE.
     }
 
@@ -244,15 +260,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             _buildGeneralInfoCard(),
             _buildSectionHeader("PRIORITY & TIMELINE"),
             _buildPriorityTimelineCard(),
-            if (_errorMessage != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Text(
-                  _errorMessage!,
-                  style: GoogleFonts.inter(color: Colors.red, fontSize: 13),
-                  textAlign: TextAlign.center,
-                ),
-              ),
             _buildSectionHeader("FINANCIAL DETAILS", hasSwitch: true),
             if (_financialDetailsEnabled) _buildFinancialDetailsCard(),
             const SizedBox(height: 12),
@@ -343,9 +350,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                 activeColor: const Color(0xFF137FEC),
                 onChanged: (val) {
                   setState(() => _financialDetailsEnabled = val);
-                  if (!_financialDetailsEnabled) {
-                    setState(() => _errorMessage = null);
-                  }
                 },
               ),
             ),
@@ -528,11 +532,11 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
                               color: _selectedPriority == p
-                                  ? Colors.white
+                                  ? _getPriorityColor(p).withOpacity(0.2)
                                   : const Color(0xFFF3F4F6),
                               borderRadius: BorderRadius.circular(8),
                               border: _selectedPriority == p
-                                  ? Border.all(color: const Color(0xFFE5E7EB))
+                                  ? Border.all(color: _getPriorityColor(p), width: 2)
                                   : null,
                               boxShadow: _selectedPriority == p
                                   ? [
@@ -550,6 +554,9 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                                 fontWeight: _selectedPriority == p
                                     ? FontWeight.bold
                                     : FontWeight.w500,
+                                color: _selectedPriority == p
+                                    ? _getPriorityColor(p)
+                                    : Colors.black,
                               ),
                             ),
                           ),
@@ -562,7 +569,9 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             onTap: _showAssigneePicker,
             child: _buildListTile(
               "Assignee",
-              _selectedAssignee ?? "Select Assignee",
+              _selectedAssigneeFullName ??
+                  _selectedAssignee ??
+                  "Select Assignee",
               true,
             ),
           ),
@@ -595,8 +604,8 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             mainAxisSize: MainAxisSize.min,
             children: _teamMembers
                 .map((member) => ListTile(
-                      title: Text(member['email'] ?? 'Unknown'),
-                      subtitle: Text(member['name'] ?? ''),
+                      title: Text(member['name'] ?? member['email'] ?? 'Unknown'),
+                      subtitle: Text(member['email'] ?? ''),
                       onTap: () => Navigator.pop(context, member['email']),
                     ))
                 .toList(),
@@ -605,7 +614,29 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       ),
     );
     if (selected != null) {
-      setState(() => _selectedAssignee = selected);
+      // Find the name of the selected member
+      final member = _teamMembers.firstWhere(
+        (m) => m['email'] == selected,
+        orElse: () => {},
+      );
+      setState(() {
+        _selectedAssignee = selected;
+        _selectedAssigneeFullName = member.isNotEmpty ? member['name'] : null;
+      });
+    }
+  }
+
+  /// Get the color for a priority level
+  Color _getPriorityColor(String priority) {
+    switch (priority.toLowerCase()) {
+      case 'high':
+        return const Color(0xFFEF4444); // Red
+      case 'medium':
+        return const Color(0xFFF59E0B); // Orange
+      case 'low':
+        return const Color(0xFF10B981); // Green
+      default:
+        return const Color(0xFF6B7280);
     }
   }
 
@@ -634,7 +665,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                Text("Estimated Expense",
+                Text(_deductFromBudget ? "Estimated Expense" : "Estimated Income",
                     style: GoogleFonts.inter(fontSize: 15)),
                 const Spacer(),
                 SizedBox(
@@ -669,27 +700,70 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
           ),
           const Divider(height: 1, indent: 16),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Deduct from Project Budget",
-                    style: GoogleFonts.inter(fontSize: 15)),
-                Transform.scale(
-                  scale: 0.8,
-                  child: Switch.adaptive(
-                    value: _deductFromBudget,
-                    activeColor: const Color(0xFF137FEC),
-                    onChanged: (val) => setState(() => _deductFromBudget = val),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _deductFromBudget = true),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _deductFromBudget ? const Color(0xFFEF4444).withOpacity(0.2) : const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(8),
+                        border: _deductFromBudget ? Border.all(color: const Color(0xFFEF4444), width: 2) : null,
+                        boxShadow: _deductFromBudget
+                            ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)]
+                            : null,
+                      ),
+                      child: Text(
+                        "Deduct from Budget",
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: _deductFromBudget ? FontWeight.bold : FontWeight.w500,
+                          color: _deductFromBudget ? const Color(0xFFEF4444) : Colors.black,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _deductFromBudget = false),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: !_deductFromBudget ? const Color(0xFF10B981).withOpacity(0.2) : const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(8),
+                        border: !_deductFromBudget ? Border.all(color: const Color(0xFF10B981), width: 2) : null,
+                        boxShadow: !_deductFromBudget
+                            ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)]
+                            : null,
+                      ),
+                      child: Text(
+                        "Add to Budget",
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: !_deductFromBudget ? FontWeight.bold : FontWeight.w500,
+                          color: !_deductFromBudget ? const Color(0xFF10B981) : Colors.black,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: Text(
-              "When enabled, the estimated expense will be automatically subtracted from the total remaining project balance.",
+              _deductFromBudget
+                  ? "The estimated expense will be subtracted from the project budget."
+                  : "The income will be added to the project budget. Changes are recorded when the project is marked complete.",
               style: GoogleFonts.inter(
                   fontSize: 12, color: const Color(0xFF9CA3AF), height: 1.4),
             ),
@@ -720,7 +794,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   }
 
   Widget _buildBudgetAlert() {
-    // Display the STATIC project ceiling - does not change as user types
+    // Display the project budget and depository balance
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
@@ -740,7 +814,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                 Text(
                   _isLoadingBudget
                       ? "Project Budget: Loading..."
-                      : "Project Budget: ₱${_trueProjectCeiling.toStringAsFixed(2)} remaining",
+                      : "Project Budget: ₱${_projectBudget.toStringAsFixed(2)} (₱${_trueProjectCeiling.toStringAsFixed(2)} remaining)",
                   style: GoogleFonts.inter(
                     color: const Color(0xFF137FEC),
                     fontWeight: FontWeight.bold,
@@ -749,7 +823,15 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "This task will reduce the budget by the estimated amount if marked.",
+                  "Depository Available: ₱${_depositoryBalance.toStringAsFixed(2)}",
+                  style: GoogleFonts.inter(
+                    color: const Color(0xFF137FEC).withOpacity(0.7),
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Budget changes recorded when project is marked complete.",
                   style: GoogleFonts.inter(
                     color: const Color(0xFF137FEC).withOpacity(0.7),
                     fontSize: 12,
