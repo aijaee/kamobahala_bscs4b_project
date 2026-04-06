@@ -324,20 +324,40 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
 
     if (!_formKey.currentState!.validate()) return;
 
-    // Calculate the maximum allowable budget using the unified balance from FinancialViewModel
-    final globalAvailableBalance = _getAvailableBalance();
-    final existingProjectBudget =
-        (viewModel.currentProject?['budget'] as num).toDouble();
-    final maxAllowableBudget = globalAvailableBalance + existingProjectBudget;
+    // Get the new budget
     final newBudget = _toDouble(budgetController.text);
-
-    // Validate: prevent save if new budget exceeds available funds
-    if (newBudget > maxAllowableBudget) {
-      setState(() {
-        _validationError =
-            'Insufficient Funds! Available in Depository: ₱${globalAvailableBalance.toStringAsFixed(2)}';
-      });
-      return;
+    
+    // Get the existing budget (old budget before edit)
+    final existingProjectBudget = 
+        _toDouble((viewModel.currentProject?['budget'] ?? '0').toString());
+    
+    // Calculate the amount being added to the budget
+    final budgetIncrease = newBudget - existingProjectBudget;
+    
+    // If budget is being increased, validate against available balance
+    if (budgetIncrease > 0) {
+      final availableBalance = _getAvailableBalance();
+      
+      // If the increase is more than what's available, show error
+      if (budgetIncrease > availableBalance) {
+        final errorMessage = 
+            'INSUFFICIENT DEPOSITORY BALANCE: Available in depository is only ₱${availableBalance.toStringAsFixed(2)}. '
+            'You are trying to allocate ₱${budgetIncrease.toStringAsFixed(2)} more.';
+        
+        setState(() {
+          _validationError = errorMessage;
+        });
+        
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: kRed,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
     }
 
     final updates = {

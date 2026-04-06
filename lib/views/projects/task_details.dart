@@ -6,6 +6,7 @@ import '../../viewmodels/tasks_viewmodel.dart';
 import '../../viewmodels/financial_viewmodel.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/organization_service.dart';
+import '../../core/services/project_service.dart';
 
 class TaskDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> task;
@@ -93,29 +94,37 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         return;
       }
 
-      // If marking as completed, record the expense to financial depository
+      // If marking as completed, update the project budget
       if (isMarkedComplete) {
-        final estimatedExpense = (widget.task['estimated_expense'] ?? 0.0) as num;
+        final estimatedAmount = (widget.task['estimated_expense'] ?? 0.0) as num;
         final deductFromBudget = widget.task['deduct_from_budget'] ?? false;
+        final projectId = widget.task['project_id'];
 
-        if (estimatedExpense > 0 && deductFromBudget && organizationId != null) {
+        if (estimatedAmount > 0 && projectId != null) {
           try {
-            // Set organization for financial viewmodel
-            financialViewModel.setCurrentOrganization(organizationId);
+            // Fetch current project to get its budget
+            final projectService = ProjectService();
+            final project = await projectService.fetchProject(projectId);
+            final currentBudget = (project['budget'] as num?)?.toDouble() ?? 0.0;
             
-            // Create transaction through ViewModel (this will notify listeners)
-            await financialViewModel.createTransaction({
-              'title': 'Task: ${widget.task['title']}',
-              'transaction_type': 'expense',
-              'amount': estimatedExpense.toDouble(),
-              'category': widget.task['expense_category'] ?? 'Task Expense',
-              'department': 'Projects',
-              'description': 'Task completed: ${widget.task['title']}',
-              'project_id': widget.task['project_id'],
-              'task_id': taskId,
-              'occurred_at': DateTime.now().toIso8601String(),
-            });
+            // Calculate new budget based on task type
+            // If deduct_from_budget=true: subtract (expense)
+            // If deduct_from_budget=false: add (income)
+            final amountChange = deductFromBudget 
+              ? estimatedAmount.toDouble() 
+              : estimatedAmount.toDouble();
+            final newBudget = deductFromBudget
+              ? currentBudget - amountChange
+              : currentBudget + amountChange;
+            
+            print('Updating project budget: Current=$currentBudget, Amount=$amountChange, Type=${deductFromBudget ? 'Expense' : 'Income'}, New=$newBudget');
+            
+            // Update project budget
+            await projectService.updateProject(projectId, {'budget': newBudget});
+            
+            print('Project budget updated successfully to $newBudget');
           } catch (e) {
+            print('Error updating project budget: $e');
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(content: Text('Note: Task completed, but could not record financial detail: $e')),
@@ -124,19 +133,39 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
           }
         }
       } else {
-        // If unchecking (marking as not completed), delete associated financial transactions
-        try {
-          final success = await financialViewModel.deleteTaskTransactions(taskId);
-          if (!success && mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Note: Task status updated, but could not remove financial detail')),
-            );
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Note: Task status updated, but could not remove financial detail: $e')),
-            );
+        // If unchecking (marking as not completed), reverse the budget change
+        final estimatedAmount = (widget.task['estimated_expense'] ?? 0.0) as num;
+        final deductFromBudget = widget.task['deduct_from_budget'] ?? false;
+        final projectId = widget.task['project_id'];
+
+        if (estimatedAmount > 0 && projectId != null) {
+          try {
+            // Fetch current project to get its budget
+            final projectService = ProjectService();
+            final project = await projectService.fetchProject(projectId);
+            final currentBudget = (project['budget'] as num?)?.toDouble() ?? 0.0;
+            
+            // Reverse the budget change
+            final amountChange = deductFromBudget 
+              ? estimatedAmount.toDouble() 
+              : estimatedAmount.toDouble();
+            final newBudget = deductFromBudget
+              ? currentBudget + amountChange  // Add back if it was deducted
+              : currentBudget - amountChange; // Subtract if it was added
+            
+            print('Reversing project budget: Current=$currentBudget, Amount=$amountChange, New=$newBudget');
+            
+            // Update project budget back to original
+            await projectService.updateProject(projectId, {'budget': newBudget});
+            
+            print('Project budget reversed successfully to $newBudget');
+          } catch (e) {
+            print('Error reversing project budget: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Note: Task status updated, but could not reverse budget: $e')),
+              );
+            }
           }
         }
       }
@@ -377,9 +406,15 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   }
 
   Widget _buildFinancialDetailsCard() {
-    final estimatedExpense = widget.task['estimated_expense'] ?? 0.0;
+    final estimatedAmount = widget.task['estimated_expense'] ?? 0.0;
     final expenseCategory = widget.task['expense_category'] ?? 'Not specified';
     final deductFromBudget = widget.task['deduct_from_budget'] ?? false;
+    
+    // Determine labels and colors based on budget mode
+    final amountLabel = deductFromBudget ? 'Estimated Expense' : 'Estimated Income';
+    final amountColor = deductFromBudget ? const Color(0xFFEF4444) : const Color(0xFF10B981);
+    final budgetModeLabel = deductFromBudget ? 'Deduct from Budget' : 'Add to Budget';
+    final budgetModeColor = deductFromBudget ? const Color(0xFFEF4444) : const Color(0xFF10B981);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -406,7 +441,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Estimated Expense',
+                amountLabel,
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: const Color(0xFF617589),
@@ -414,11 +449,11 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                 ),
               ),
               Text(
-                '₱${estimatedExpense.toStringAsFixed(2)}',
+                '₱${estimatedAmount.toStringAsFixed(2)}',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFF137FEC),
+                  color: amountColor,
                 ),
               ),
             ],
@@ -430,7 +465,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Expense Category',
+                'Category',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: const Color(0xFF617589),
@@ -454,7 +489,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Deduct from Budget',
+                'Budget Mode',
                 style: GoogleFonts.inter(
                   fontSize: 13,
                   color: const Color(0xFF617589),
@@ -462,17 +497,18 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: deductFromBudget ? const Color(0xFFDEF7EC) : const Color(0xFFFEE2E2),
+                  color: budgetModeColor.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: budgetModeColor, width: 1),
                 ),
                 child: Text(
-                  deductFromBudget ? 'Yes' : 'No',
+                  budgetModeLabel,
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: deductFromBudget ? const Color(0xFF059669) : const Color(0xFFDC2626),
+                    color: budgetModeColor,
                   ),
                 ),
               ),
