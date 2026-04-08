@@ -8,10 +8,8 @@ import '../../core/services/organization_service.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/dashboard_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'financial_ledger.dart';
 import 'tasks_by_category_screen.dart';
 import 'search_results_screen.dart';
-import '../projects/projects_list.dart';
 import '../projects/project_overview.dart';
 import '../projects/task_details.dart';
 
@@ -314,13 +312,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
         ),
       );
     } else if (type == 'transaction') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              FinancialLedgerScreen(organization: widget.organization),
-        ),
-      );
+      // Switch to Finances tab using the callback
+      widget.onTabChange?.call(2);
     }
   }
 
@@ -614,13 +607,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => FinancialLedgerScreen(
-                      organization: widget.organization),
-                ),
-              );
+              // Switch to Finances tab using the callback
+              widget.onTabChange?.call(2);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,

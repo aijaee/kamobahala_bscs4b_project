@@ -328,12 +328,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Project created successfully')),
       );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization),
-        ),
-      );
+      Navigator.pop(context, true); // Pop with success flag to trigger refresh
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(viewModel.errorMessage ?? 'Failed to create project')),

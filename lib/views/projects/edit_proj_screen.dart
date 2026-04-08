@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kamobahala_bscs4b_project/viewmodels/financial_viewmodel.dart';
-import 'projects_list.dart';
+
 import '../../viewmodels/projects_viewmodel.dart';
 
 // ── Brand constants (shared with CreateOrganizationScreen) ───────────────────
@@ -189,12 +189,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close, color: kRed),
-          onPressed: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-                builder: (_) => ProjectsList(
-                    initialIndex: 1, organization: widget.organization)),
-          ),
+          onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           "Edit Project",
@@ -375,12 +370,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Project updated successfully')),
       );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-            builder: (_) => ProjectsList(
-                initialIndex: 1, organization: widget.organization)),
-      );
+      Navigator.pop(context, true); // Pop with success flag to trigger refresh
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -430,12 +420,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                 if (success) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                       content: Text('Project deleted successfully')));
-                  Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => ProjectsList(
-                              initialIndex: 1,
-                              organization: widget.organization)));
+                  Navigator.pop(context, true); // Pop with success flag to trigger refresh
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(viewModel.errorMessage ??

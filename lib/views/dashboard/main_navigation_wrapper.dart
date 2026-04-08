@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../projects/projects_list.dart';
 import '../projects/new_proj_screen.dart';
 import '../dashboard/organization_dashboard.dart';
 import '../dashboard/financial_ledger.dart';
 import '../profile/profile_screen.dart';
 import '../../core/services/admin_service.dart';
+import '../../viewmodels/projects_viewmodel.dart';
 
 class MainNavigationWrapper extends StatefulWidget {
   final Map<String, dynamic> organization;
@@ -55,9 +57,12 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
                   MaterialPageRoute(
                     builder: (_) => CreateProjectScreen(organization: widget.organization),
                   ),
-                ).then((_) {
+                ).then((_) async {
                   // Refresh projects when returning
                   if (mounted) {
+                    // Refresh the projects list
+                    await context.read<ProjectsViewModel>()
+                        .fetchProjectsWithProgress(widget.organization['id'].toString());
                     setState(() {});
                   }
                 });

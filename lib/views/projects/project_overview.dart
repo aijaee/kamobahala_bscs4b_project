@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../dashboard/organization_dashboard.dart';
-import 'projects_list.dart';
-import '../dashboard/financial_ledger.dart';
+
 import 'task_list_screen.dart';
 import 'edit_proj_screen.dart';
 import '../../viewmodels/tasks_viewmodel.dart';
@@ -695,20 +693,8 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
         currentIndex: _selectedIndex,
         onTap: (index) {
           if (index == _selectedIndex) return;
-          switch (index) {
-            case 0:
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OrganizationDashboard(organization: widget.organization)));
-              break;
-            case 1:
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProjectsList(organization: widget.organization)));
-              break;
-            case 2:
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => FinancialLedgerScreen(organization: widget.organization)));
-              break;
-            case 3:
-              setState(() => _selectedIndex = index);
-              break;
-          }
+          // Pop back to MainNavigationWrapper and let it handle the tab switch
+          Navigator.pop(context);
         },
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.transparent,
