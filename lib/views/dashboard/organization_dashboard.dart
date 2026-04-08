@@ -303,6 +303,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
           builder: (_) => ProjectOverviewScreen(
             project: data,
             organization: widget.organization,
+            onTabChange: widget.onTabChange,
           ),
         ),
       );
@@ -1411,6 +1412,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
             builder: (context) => ProjectOverviewScreen(
               organization: widget.organization,
               project: project,
+              onTabChange: widget.onTabChange,
             ),
           ),
         );

@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/task.dart';
+import 'financial_service.dart';
 
 class TaskService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -38,7 +39,38 @@ class TaskService {
     final response =
         await _client.from('tasks').insert(data).select().single();
 
-    return Task.fromMap(response);
+    final task = Task.fromMap(response);
+
+    // Create financial transaction if deduct_from_budget is true and estimated_expense > 0
+    final deductFromBudget = taskData['deduct_from_budget'] as bool? ?? false;
+    final estimatedExpense = (taskData['estimated_expense'] as num?)?.toDouble() ?? 0.0;
+    final organizationId = taskData['organization_id'] as String?;
+    final taskTitle = taskData['title'] as String? ?? 'Task';
+
+    if (deductFromBudget && estimatedExpense > 0 && organizationId != null) {
+      try {
+        final financialService = FinancialService();
+        await financialService.createTransaction(
+          organizationId,
+          {
+            'title': 'Task: $taskTitle',
+            'description': 'Expense for task: $taskTitle',
+            'department': 'Tasks',
+            'transaction_type': 'expense',
+            'amount': estimatedExpense,
+            'occurred_at': DateTime.now().toIso8601String(),
+            'task_id': task.id,
+            'project_id': projectId,
+          },
+        );
+      } catch (e) {
+        print('Error creating financial transaction for task: $e');
+        // Don't fail the task creation if transaction fails
+        // Just log the error
+      }
+    }
+
+    return task;
   }
 
   Future<Task> updateTask(
@@ -50,7 +82,14 @@ class TaskService {
         .select()
         .single();
 
-    return Task.fromMap(response);
+    final task = Task.fromMap(response);
+
+    // Handle financial transaction updates if needed
+    // If estimated_expense or deduct_from_budget changed, we might need to update transactions
+    // For now, just return the updated task
+    // TODO: Implement transaction updates if financial details changed
+
+    return task;
   }
 
   Future<bool> deleteTask(String taskId) async {

@@ -110,13 +110,11 @@ class OrganizationService {
       
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      return [
-        {'id': '1', 'name': 'Development'},
-        {'id': '2', 'name': 'Design'},
-        {'id': '3', 'name': 'Marketing'},
-        {'id': '4', 'name': 'Documentation'},
-        {'id': '5', 'name': 'Testing'},
-      ];
+      print('Error fetching task categories: $e');
+      // Don't fall back to hardcoded list - return empty list or throw
+      // This way users will see an error and know something went wrong
+      // rather than losing their custom categories
+      return [];
     }
   }
 

@@ -66,7 +66,10 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
 
   Future<void> _refreshProjectsWithProgress() async {
     if (mounted) {
-      await context.read<ProjectsViewModel>().fetchProjectsWithProgress(widget.organization['id'].toString());
+      await Future.wait([
+        context.read<ProjectsViewModel>().fetchProjectsWithProgress(widget.organization['id'].toString()),
+        context.read<ProjectsViewModel>().fetchCompletedProjects(),
+      ]);
       _buildTabsFromProjects();
       await _fetchBalance();
     }
@@ -204,6 +207,7 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                                             builder: (_) => ProjectOverviewScreen(
                                               organization: widget.organization,
                                               project: project,
+                                              onTabChange: widget.onTabChange,
                                             ),
                                           ),
                                         ).then((_) {

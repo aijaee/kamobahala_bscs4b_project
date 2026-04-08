@@ -118,6 +118,33 @@ class FinancialViewModel extends ChangeNotifier {
     }
   }
 
+  /// Updates an existing transaction
+  Future<bool> updateTransaction(
+    String transactionId,
+    Map<String, dynamic> updates,
+  ) async {
+    _errorMessage = null;
+
+    try {
+      final updated = await _financialService.updateTransaction(transactionId, updates);
+
+      if (updated != null) {
+        // Update in local list
+        final index = _transactions.indexWhere((t) => t.id == transactionId);
+        if (index != -1) {
+          _transactions[index] = updated;
+        }
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      _errorMessage = 'Failed to update transaction: ${e.toString()}';
+      notifyListeners();
+      return false;
+    }
+  }
+
   void updateFilter(int filterIndex) {
     if (filterIndex >= 0 && filterIndex < _filters.length) {
       _selectedFilterIndex = filterIndex;

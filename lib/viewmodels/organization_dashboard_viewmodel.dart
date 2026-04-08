@@ -134,11 +134,12 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
   }
 
   double _toDouble(dynamic value) {
+    if (value == null) return 0.0;
     if (value is num) {
       return value.toDouble();
     }
 
-    return double.tryParse(value?.toString() ?? '') ?? 0;
+    return double.tryParse(value?.toString() ?? '') ?? 0.0;
   }
 
   Future<void> refresh(Map<String, dynamic> organization) async {

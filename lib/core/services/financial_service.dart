@@ -51,6 +51,26 @@ class FinancialService {
     }
   }
 
+  /// Update a transaction by its ID
+  Future<FinancialTransaction?> updateTransaction(
+    String transactionId,
+    Map<String, dynamic> updates,
+  ) async {
+    try {
+      final response = await _client
+          .from('financial_transactions')
+          .update(updates)
+          .eq('id', transactionId)
+          .select()
+          .single();
+
+      return FinancialTransaction.fromMap(response);
+    } catch (e) {
+      print('Error updating transaction: $e');
+      return null;
+    }
+  }
+
   /// Delete all transactions associated with a task
   Future<bool> deleteTaskTransactions(String taskId) async {
     try {

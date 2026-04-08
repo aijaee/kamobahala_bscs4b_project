@@ -11,6 +11,7 @@ import 'new_task_screen.dart';
 import 'edit_task_screen.dart';
 import '../dashboard/organization_dashboard.dart';
 import '../dashboard/financial_ledger.dart';
+import '../profile/profile_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   final String projectId;
@@ -461,6 +462,16 @@ class _TaskListScreenState extends State<TaskListScreen> {
                     'id': widget.organizationId,
                     'name': 'Organization',
                   },
+                ),
+              ),
+            );
+          } else if (index == 3) {
+            // Navigate to ProfileScreen
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ProfileScreen(
+                  organizationId: widget.organizationId,
                 ),
               ),
             );

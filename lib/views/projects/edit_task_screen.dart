@@ -101,7 +101,16 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
 
       // Fetch depository balance from FinancialViewModel
       final financialVM = context.read<FinancialViewModel>();
-      final openingBudget = 0.0; // Will be fetched from organization
+      final orgService = OrganizationService();
+      final organizations = await orgService.getOrganizations();
+      double openingBudget = 0.0;
+      if (organizations.isNotEmpty) {
+        final currentOrg = organizations.firstWhere(
+          (org) => org.id == widget.organizationId,
+          orElse: () => organizations.first,
+        );
+        openingBudget = currentOrg.budget ?? 0.0;
+      }
       final depositoryBalance = financialVM.calculateAvailableBalance(openingBudget);
 
       if (mounted) {
@@ -133,6 +142,18 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       setState(() {
         _teamMembers = response;
         _categories = categories.map((c) => c['name'] as String).toList();
+        
+        // Provide default categories if none exist
+        if (_categories.isEmpty) {
+          _categories = [
+            'Development',
+            'Design',
+            'Marketing',
+            'Documentation',
+            'Testing',
+          ];
+        }
+        
         _isLoadingData = false;
       });
     } catch (e) {

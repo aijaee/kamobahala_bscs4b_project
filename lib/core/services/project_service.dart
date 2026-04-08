@@ -6,7 +6,7 @@ class ProjectService {
 
   Future<List<Project>> fetchProjects(String orgId) async {
     final response =
-        await _client.from('projects').select().eq('organization_id', orgId);
+        await _client.from('projects').select().eq('organization_id', orgId).neq('status', 'completed');
 
     return (response as List)
         .map((p) => Project.fromMap(p as Map<String, dynamic>))

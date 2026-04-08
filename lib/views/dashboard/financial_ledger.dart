@@ -338,7 +338,9 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
               Text(
                 isBudgetAllocation
                     ? _formatCurrency(amount.abs())
-                    : '${isIncome ? '+' : '-'}${_formatCurrency(amount.abs())}',
+                    : amount == 0 
+                        ? _formatCurrency(amount.abs())
+                        : '${isIncome ? '+' : '-'}${_formatCurrency(amount.abs())}',
                 style: GoogleFonts.inter(
                   color: isBudgetAllocation
                       ? const Color(

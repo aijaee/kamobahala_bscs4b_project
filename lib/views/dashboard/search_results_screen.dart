@@ -388,7 +388,9 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    '${isIncome ? '+' : '-'}${_formatCurrency(amount.toDouble())}',
+                    amount == 0
+                        ? _formatCurrency(amount.toDouble())
+                        : '${isIncome ? '+' : '-'}${_formatCurrency(amount.toDouble())}',
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,

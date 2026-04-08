@@ -4,6 +4,7 @@ class Organization {
   final String name;
   final String? description;
   final String? logoUrl;
+  final double? budget;
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -12,6 +13,7 @@ class Organization {
     required this.name,
     this.description,
     this.logoUrl,
+    this.budget,
     required this.createdAt,
     this.updatedAt,
   });
@@ -23,6 +25,7 @@ class Organization {
       name: map['name'] as String? ?? '',
       description: map['description'] as String?,
       logoUrl: map['logo_url'] as String?,
+      budget: _toDouble(map['budget']),
       createdAt: map['created_at'] != null
           ? DateTime.parse(map['created_at'] as String)
           : DateTime.now(),
@@ -39,6 +42,7 @@ class Organization {
       'name': name,
       'description': description,
       'logo_url': logoUrl,
+      'budget': budget,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
     };
@@ -50,6 +54,7 @@ class Organization {
     String? name,
     String? description,
     String? logoUrl,
+    double? budget,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -58,6 +63,7 @@ class Organization {
       name: name ?? this.name,
       description: description ?? this.description,
       logoUrl: logoUrl ?? this.logoUrl,
+      budget: budget ?? this.budget,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -65,7 +71,7 @@ class Organization {
 
   @override
   String toString() =>
-      'Organization(id: $id, name: $name, createdAt: $createdAt)';
+      'Organization(id: $id, name: $name, budget: $budget, createdAt: $createdAt)';
 
   @override
   bool operator ==(Object other) =>
@@ -76,4 +82,13 @@ class Organization {
 
   @override
   int get hashCode => id.hashCode;
+}
+
+/// Helper to convert dynamic values to double?
+double? _toDouble(dynamic value) {
+  if (value == null) return null;
+  if (value is double) return value;
+  if (value is int) return value.toDouble();
+  if (value is String) return double.tryParse(value);
+  return null;
 }

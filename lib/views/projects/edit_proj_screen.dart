@@ -338,15 +338,6 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
         setState(() {
           _validationError = errorMessage;
         });
-        
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: kRed,
-            duration: const Duration(seconds: 4),
-          ),
-        );
         return;
       }
     }

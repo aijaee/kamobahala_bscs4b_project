@@ -12,6 +12,7 @@ import '../../core/services/admin_service.dart';
 class ProjectOverviewScreen extends StatefulWidget {
   final Map<String, dynamic> organization;
   final Project? project;
+  final Function(int)? onTabChange;
 
   const ProjectOverviewScreen({
     super.key,
@@ -21,6 +22,7 @@ class ProjectOverviewScreen extends StatefulWidget {
       'budget': 20000.0,
     },
     this.project,
+    this.onTabChange,
   });
 
   @override
@@ -136,6 +138,10 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Project "${widget.project?.name}" marked as completed (Net: ₱${netAmount.toStringAsFixed(2)})')),
       );
+      
+      // Refresh completed projects list
+      await projectsVM.fetchCompletedProjects();
+      
       // Navigate back after a short delay
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
@@ -667,8 +673,15 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
         currentIndex: _selectedIndex,
         onTap: (index) {
           if (index == _selectedIndex) return;
-          // Pop back to MainNavigationWrapper and let it handle the tab switch
-          Navigator.pop(context);
+          
+          // If we have an onTabChange callback, use it to switch tabs
+          if (widget.onTabChange != null) {
+            Navigator.pop(context);
+            widget.onTabChange!(index);
+          } else {
+            // Fallback: just pop back
+            Navigator.pop(context);
+          }
         },
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.transparent,

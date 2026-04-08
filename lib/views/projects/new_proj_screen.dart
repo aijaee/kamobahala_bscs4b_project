@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'projects_list.dart';
 import '../../viewmodels/projects_viewmodel.dart';
 import '../../viewmodels/financial_viewmodel.dart';
 import '../../models/financial_transaction.dart';
@@ -186,10 +185,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close, color: kRed),
-          onPressed: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization)),
-          ),
+          onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           "New Project",
