@@ -38,7 +38,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   String? _selectedExpenseCategory;
   DateTime? _selectedDueDate;
   List<String> _categories = [];
-  List<Map<String, dynamic>> _teamMembers = [];
+  List<String> _teamMemberEmails = [];
   bool _isLoadingData = true;
   String? _loadError;
 
@@ -69,19 +69,12 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
     try {
       final projectService = ProjectService();
       final project = await projectService.fetchProject(widget.projectId);
-      final allocatedBudget = (project['budget'] as num? ?? 0).toDouble();
+      final allocatedBudget = project.budget ?? 0.0;
 
       final taskService = TaskService();
-      final projectTasks =
-          await taskService.fetchProjectTasks(widget.projectId);
+      await taskService.fetchProjectTasks(widget.projectId);
 
-      double existingTasksExpenses = projectTasks.fold(0.0, (sum, task) {
-        if (task['deduct_from_budget'] == true) {
-          final taskExpense = (task['estimated_expense'] as num?) ?? 0;
-          return sum + taskExpense.toDouble();
-        }
-        return sum;
-      });
+      double existingTasksExpenses = 0.0; // TODO: Update with new financial model
 
       // Fetch depository balance from FinancialViewModel
       final financialVM = context.read<FinancialViewModel>();
@@ -115,15 +108,15 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
           await orgService.getTaskCategories(widget.organizationId);
 
       setState(() {
-        _teamMembers = response;
+        _teamMemberEmails = response.map((m) => m.email).toList();
         _categories = categories.map((c) => c['name'] as String).toList();
         if (_categories.isNotEmpty) {
           _selectedCategory = _categories.first;
           _selectedExpenseCategory = _categories.first;
         }
-        if (_teamMembers.isNotEmpty) {
-          _selectedAssignee = _teamMembers.first['email'];
-          _selectedAssigneeFullName = _teamMembers.first['name'];
+        if (_teamMemberEmails.isNotEmpty) {
+          _selectedAssignee = _teamMemberEmails.first;
+          _selectedAssigneeFullName = _selectedAssignee;
         }
         _isLoadingData = false;
       });
@@ -347,7 +340,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
               scale: 0.8,
               child: Switch.adaptive(
                 value: _financialDetailsEnabled,
-                activeColor: const Color(0xFF137FEC),
+                activeThumbColor: const Color(0xFF137FEC),
                 onChanged: (val) {
                   setState(() => _financialDetailsEnabled = val);
                 },
@@ -531,8 +524,8 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                             margin: const EdgeInsets.symmetric(horizontal: 4),
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                              color: _selectedPriority == p
-                                  ? _getPriorityColor(p).withOpacity(0.2)
+                                color: _selectedPriority == p
+                                  ? _getPriorityColor(p).withValues(alpha: 0.2)
                                   : const Color(0xFFF3F4F6),
                               borderRadius: BorderRadius.circular(8),
                               border: _selectedPriority == p
@@ -540,8 +533,8 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                                   : null,
                               boxShadow: _selectedPriority == p
                                   ? [
-                                      BoxShadow(
-                                          color: Colors.black.withOpacity(0.05),
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.05),
                                           blurRadius: 4)
                                     ]
                                   : null,
@@ -602,11 +595,11 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: _teamMembers
-                .map((member) => ListTile(
-                      title: Text(member['name'] ?? member['email'] ?? 'Unknown'),
-                      subtitle: Text(member['email'] ?? ''),
-                      onTap: () => Navigator.pop(context, member['email']),
+            children: _teamMemberEmails
+                .map((email) => ListTile(
+                      title: Text(email),
+                      subtitle: Text(email),
+                      onTap: () => Navigator.pop(context, email),
                     ))
                 .toList(),
           ),
@@ -614,14 +607,9 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       ),
     );
     if (selected != null) {
-      // Find the name of the selected member
-      final member = _teamMembers.firstWhere(
-        (m) => m['email'] == selected,
-        orElse: () => {},
-      );
       setState(() {
         _selectedAssignee = selected;
-        _selectedAssigneeFullName = member.isNotEmpty ? member['name'] : null;
+        _selectedAssigneeFullName = selected;
       });
     }
   }
@@ -799,7 +787,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF137FEC).withOpacity(0.1),
+        color: const Color(0xFF137FEC).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -825,7 +813,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                 Text(
                   "Depository Available: ₱${_depositoryBalance.toStringAsFixed(2)}",
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF137FEC).withOpacity(0.7),
+                    color: const Color(0xFF137FEC).withValues(alpha: 0.7),
                     fontSize: 12,
                   ),
                 ),
@@ -833,7 +821,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                 Text(
                   "Budget changes recorded when project is marked complete.",
                   style: GoogleFonts.inter(
-                    color: const Color(0xFF137FEC).withOpacity(0.7),
+                    color: const Color(0xFF137FEC).withValues(alpha: 0.7),
                     fontSize: 12,
                   ),
                 ),

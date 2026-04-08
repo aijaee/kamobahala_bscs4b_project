@@ -1,10 +1,12 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../models/organization.dart';
+import '../../models/organization_member.dart';
 
 class OrganizationService {
   final SupabaseClient _client = Supabase.instance.client;
 
   // TODO: [MVVM] this should be called via OrganizationViewModel for UI data binding
-  Future<List<Map<String, dynamic>>> getOrganizations() async {
+  Future<List<Organization>> getOrganizations() async {
     try {
       final user = _client.auth.currentUser;
       if (user == null) return [];
@@ -23,17 +25,21 @@ class OrganizationService {
           .select()
           .inFilter('id', orgIds.toList());
 
-      return List<Map<String, dynamic>>.from(organizations);
+      return (organizations as List)
+          .map((o) => Organization.fromMap(o as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       print('Error fetching organizations: $e');
       return [];
     }
   }
 
-  Future<Map<String, dynamic>> createOrganization(
+  Future<Organization> createOrganization(
       Map<String, dynamic> data) async {
     try {
       final newOrg = await _client.from('organizations').insert(data).select().single();
+      final organization = Organization.fromMap(newOrg);
+      
       final user = _client.auth.currentUser;
       if (user != null && newOrg['id'] != null) {
         String? creatorFullName;
@@ -57,45 +63,38 @@ class OrganizationService {
         });
       }
       
-      return newOrg;
+      return organization;
     } catch (e) {
       print('Error creating organization: $e');
       rethrow;
     }
   }
 
-  Future<Map<String, dynamic>> updateOrganization(
+  Future<Organization> updateOrganization(
       String id, Map<String, dynamic> data) async {
-    return await _client
+    final response = await _client
         .from('organizations')
         .update(data)
         .eq('id', id)
         .select()
         .single();
+    return Organization.fromMap(response);
   }
 
   Future<void> deleteOrganization(String id) async {
     await _client.from('organizations').delete().eq('id', id);
   }
 
-  Future<List<Map<String, dynamic>>> getOrganizationMembers(String organizationId) async {
+  Future<List<OrganizationMember>> getOrganizationMembers(String organizationId) async {
     try {
       final response = await _client
           .from('organization_members')
           .select()
           .eq('organization_id', organizationId);
       
-      // Normalize 'name' to 'full_name' for consistent UI display
-      List<Map<String, dynamic>> members = [];
-      for (var member in response) {
-        final memberMap = Map<String, dynamic>.from(member);
-        if (memberMap['name'] != null && memberMap['full_name'] == null) {
-          memberMap['full_name'] = memberMap['name'];
-        }
-        members.add(memberMap);
-      }
-      
-      return members;
+      return (response as List)
+          .map((m) => OrganizationMember.fromMap(m as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       print('Error fetching organization members: $e');
       return [];

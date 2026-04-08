@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/services/auth_service.dart';
 import '../core/services/organization_service.dart';
 import '../core/services/admin_service.dart';
+import '../models/organization.dart';
 
 class ProfileViewModel extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -15,7 +16,7 @@ class ProfileViewModel extends ChangeNotifier {
   String? _currentOrganizationId;
   String? _currentOrganizationName;
   String? _userRole;
-  List<Map<String, dynamic>> _organizations = [];
+  List<Organization> _organizations = [];
 
   // Loading and Error States
   bool _isLoading = false;
@@ -29,7 +30,7 @@ class ProfileViewModel extends ChangeNotifier {
   String? get currentOrganizationId => _currentOrganizationId;
   String? get currentOrganizationName => _currentOrganizationName;
   String? get userRole => _userRole;
-  List<Map<String, dynamic>> get organizations => _organizations;
+  List<Organization> get organizations => _organizations;
   bool get isLoading => _isLoading;
   bool get isUpdatingName => _isUpdatingName;
   String? get errorMessage => _errorMessage;
@@ -39,6 +40,7 @@ class ProfileViewModel extends ChangeNotifier {
   Future<void> initializeProfile(String organizationId) async {
     _setLoading(true);
     _errorMessage = null;
+    _successMessage = null;
 
     try {
       // Parallelize all database calls for faster loading
@@ -62,15 +64,19 @@ class ProfileViewModel extends ChangeNotifier {
       
       // Find current organization name
       final currentOrg = _organizations.firstWhere(
-        (org) => org['id'] == organizationId,
-        orElse: () => {},
+        (org) => org.id == organizationId,
+        orElse: () => Organization(
+          id: '',
+          name: '',
+          createdAt: DateTime.now(),
+        ),
       );
-      if (currentOrg.isNotEmpty) {
-        _currentOrganizationName = currentOrg['name'] as String?;
+      if (currentOrg.id.isNotEmpty) {
+        _currentOrganizationName = currentOrg.name;
       }
 
       // Set role from parallel results
-      _userRole = results[2] as String?;
+      _userRole = results[2];
 
       _setLoading(false);
     } catch (e) {

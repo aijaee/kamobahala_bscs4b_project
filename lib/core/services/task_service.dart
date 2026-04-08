@@ -1,32 +1,34 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../models/task.dart';
 
 class TaskService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  Future<List<Map<String, dynamic>>> fetchProjectTasks(String projectId) async {
+  Future<List<Task>> fetchProjectTasks(String projectId) async {
     final response = await _client
         .from('tasks')
         .select()
         .eq('project_id', projectId)
         .order('due_date', ascending: true);
 
-    return List<Map<String, dynamic>>.from(response);
+    return (response as List)
+        .map((t) => Task.fromMap(t as Map<String, dynamic>))
+        .toList();
   }
 
-  Future<Map<String, List<Map<String, dynamic>>>> fetchTasksByCategory(
-      String projectId) async {
+  Future<Map<String, List<Task>>> fetchTasksByCategory(String projectId) async {
     final tasks = await fetchProjectTasks(projectId);
-    final Map<String, List<Map<String, dynamic>>> grouped = {};
+    final Map<String, List<Task>> grouped = {};
 
     for (final task in tasks) {
-      final category = task['category'] ?? 'Uncategorized';
+      final category = task.category ?? 'Uncategorized';
       grouped.putIfAbsent(category, () => []).add(task);
     }
 
     return grouped;
   }
 
-  Future<Map<String, dynamic>> createTask(
+  Future<Task> createTask(
       String projectId, Map<String, dynamic> taskData) async {
     final data = {
       ...taskData,
@@ -36,10 +38,10 @@ class TaskService {
     final response =
         await _client.from('tasks').insert(data).select().single();
 
-    return response;
+    return Task.fromMap(response);
   }
 
-  Future<Map<String, dynamic>> updateTask(
+  Future<Task> updateTask(
       String taskId, Map<String, dynamic> updates) async {
     final response = await _client
         .from('tasks')
@@ -48,7 +50,7 @@ class TaskService {
         .select()
         .single();
 
-    return response;
+    return Task.fromMap(response);
   }
 
   Future<bool> deleteTask(String taskId) async {
