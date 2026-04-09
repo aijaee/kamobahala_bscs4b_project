@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../viewmodels/financial_viewmodel.dart';
 import '../../viewmodels/organization_dashboard_viewmodel.dart';
 import '../../viewmodels/projects_viewmodel.dart';
+import '../../viewmodels/tasks_viewmodel.dart';
 import '../../core/services/admin_service.dart';
 import '../../models/project.dart';
 import 'project_overview.dart';
@@ -144,8 +145,8 @@ class _ProjectsListState extends State<ProjectsList>
   Widget build(BuildContext context) {
     return Consumer<ProjectsViewModel>(
       builder: (context, projectsViewModel, _) {
-        return Consumer<FinancialViewModel>(
-          builder: (context, financialViewModel, _) {
+        return Consumer2<FinancialViewModel, TasksViewModel>(
+          builder: (context, financialViewModel, tasksViewModel, _) {
             return Material(
               color: Colors.white,
               child: SafeArea(
@@ -189,18 +190,15 @@ class _ProjectsListState extends State<ProjectsList>
                                     .getProjectProgressFromCache(project.id)
                                     .clamp(0.0, 1.0);
 
-                                double spent = 0.0;
                                 final projectId = project.id;
-                                for (final transaction
-                                    in financialViewModel.transactions) {
-                                  if (transaction.projectId == projectId &&
-                                      transaction.transactionType
-                                              .toLowerCase() ==
-                                          'expense' &&
-                                      transaction.title.startsWith('Task:')) {
-                                    spent += transaction.amount;
-                                  }
-                                }
+                                final projectTasks = tasksViewModel.tasks
+                                    .where((task) =>
+                                        task.projectId == projectId &&
+                                        task.isCompleted)
+                                    .toList();
+                                final spent =
+                                    financialViewModel.calculateProjectSpent(
+                                        projectId, projectTasks);
 
                                 final projectBudget = project.budget ?? 0.0;
                                 String budget = projectBudget > 0
