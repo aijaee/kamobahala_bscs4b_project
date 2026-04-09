@@ -292,6 +292,30 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
       return;
     }
 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Create Project'),
+          content: Text(
+            'Create project "${nameController.text.trim()}" with ₱${inputBudget.toStringAsFixed(2)} budget?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Create'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
     final projectData = {
       'name': nameController.text,
       'description': descriptionController.text,

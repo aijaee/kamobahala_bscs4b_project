@@ -265,6 +265,30 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       return; // THIS KILLS THE FUNCTION. DO NOT PROCEED TO SAVE.
     }
 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Save Task Changes'),
+          content: Text(
+            'Apply changes to "${_taskNameController.text.trim()}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
     final taskData = <String, dynamic>{
       'title': _taskNameController.text,
       'category': _selectedCategory ?? 'Uncategorized',
@@ -915,7 +939,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                             : null,
                       ),
                       child: Text(
-                        "Add to Budget",
+                        "Add to Depo",
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 14,
@@ -938,7 +962,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
             child: Text(
               _deductFromBudget
                   ? "The estimated expense will be subtracted from the project budget."
-                  : "The income will be added to the project budget. Changes are recorded when the project is marked complete.",
+                : "The income will be added to the depository. Entries are recorded when the project is marked complete.",
               style: GoogleFonts.inter(
                   fontSize: 12, color: const Color(0xFF9CA3AF), height: 1.4),
             ),
@@ -1007,7 +1031,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Budget changes recorded when project is marked complete.",
+                  "Depo entries are recorded when project is marked complete.",
                   style: GoogleFonts.inter(
                     color: const Color(0xFF137FEC).withOpacity(0.7),
                     fontSize: 12,
