@@ -9,20 +9,19 @@ import 'package:kamobahala_bscs4b_project/models/task.dart';
 import 'task_details.dart';
 import 'new_task_screen.dart';
 import 'edit_task_screen.dart';
-import '../dashboard/organization_dashboard.dart';
-import '../dashboard/financial_ledger.dart';
-import '../profile/profile_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   final String projectId;
   final String organizationId;
   final String projectName;
+  final Function(int)? onTabChange;
 
   const TaskListScreen({
     super.key,
     required this.projectId,
     required this.organizationId,
     required this.projectName,
+    this.onTabChange,
   });
 
   @override
@@ -70,7 +69,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       // TODO: [REFACTORING] Financial tracking for tasks needs to be re-implemented
       // The Task model no longer stores estimated_expense, deduct_from_budget, expense_category
       // These should be stored in a separate financial tracking system or FinancialTransaction model
-      
+
       if (mounted) {
         Provider.of<TasksViewModel>(context, listen: false)
             .fetchProjectTasks(widget.projectId);
@@ -91,7 +90,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Note: Task status updated, but could not remove financial detail: $e')),
+            SnackBar(
+                content: Text(
+                    'Note: Task status updated, but could not remove financial detail: $e')),
           );
         }
       }
@@ -101,14 +102,15 @@ class _TaskListScreenState extends State<TaskListScreen> {
   /// Handle task deletion with confirmation dialog
   Future<void> _handleDeleteTask(BuildContext context, Task task) async {
     final taskTitle = task.title;
-    
+
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Delete Task'),
-          content: Text('Are you sure you want to delete "$taskTitle"? This action cannot be undone.'),
+          content: Text(
+              'Are you sure you want to delete "$taskTitle"? This action cannot be undone.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -128,10 +130,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
     try {
       final taskId = task.id;
-      
+
       // Delete the task
-      final success = await Provider.of<TasksViewModel>(context, listen: false).deleteTask(taskId);
-      
+      final success = await Provider.of<TasksViewModel>(context, listen: false)
+          .deleteTask(taskId);
+
       if (!success) {
         throw Exception('Failed to delete task from database');
       }
@@ -140,7 +143,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         // Refresh task list and financial data
         await Provider.of<TasksViewModel>(context, listen: false)
             .fetchProjectTasks(widget.projectId);
-        
+
         // Also refresh financial data in case the task had any transactions
         await Provider.of<FinancialViewModel>(context, listen: false)
             .fetchTransactions(widget.organizationId);
@@ -173,8 +176,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
             backgroundColor: Colors.white,
             child: tasksViewModel.isLoading && tasksViewModel.tasks.isEmpty
                 ? const Center(child: CircularProgressIndicator())
-                : tasksViewModel.errorMessage != null && tasksViewModel.tasks.isEmpty
-                    ? Center(child: Text(tasksViewModel.errorMessage ?? 'Error'))
+                : tasksViewModel.errorMessage != null &&
+                        tasksViewModel.tasks.isEmpty
+                    ? Center(
+                        child: Text(tasksViewModel.errorMessage ?? 'Error'))
                     : tasksViewModel.tasks.isEmpty
                         ? _buildEmptyState()
                         : _buildTaskList(tasksViewModel),
@@ -207,7 +212,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   Widget _buildTaskList(TasksViewModel tasksViewModel) {
     final tasks = tasksViewModel.tasks;
-    final completedTasks = tasks.where((task) => task.status == 'completed').length;
+    final completedTasks =
+        tasks.where((task) => task.status == 'completed').length;
     final progress = tasks.isNotEmpty ? completedTasks / tasks.length : 0.0;
 
     return SingleChildScrollView(
@@ -279,7 +285,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
         border: Border.all(color: const Color(0xFFF3F4F6)),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         leading: Checkbox(
           value: isCompleted,
           onChanged: (value) {
@@ -300,7 +307,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
           task.description ?? 'No description',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF9CA3AF)),
+          style:
+              GoogleFonts.inter(fontSize: 12, color: const Color(0xFF9CA3AF)),
         ),
         trailing: _isAdmin
             ? SizedBox(
@@ -310,7 +318,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.edit, color: Color(0xFF137FEC), size: 20),
+                      icon: const Icon(Icons.edit,
+                          color: Color(0xFF137FEC), size: 20),
                       onPressed: () {
                         Navigator.push(
                           context,
@@ -326,13 +335,15 @@ class _TaskListScreenState extends State<TaskListScreen> {
                           // Refresh task list and financial data when returning
                           Provider.of<TasksViewModel>(context, listen: false)
                               .fetchProjectTasks(widget.projectId);
-                          Provider.of<FinancialViewModel>(context, listen: false)
+                          Provider.of<FinancialViewModel>(context,
+                                  listen: false)
                               .fetchTransactions(widget.organizationId);
                         });
                       },
                     ),
                     IconButton(
-                      icon: const Icon(Icons.delete, color: Color(0xFFEF4444), size: 20),
+                      icon: const Icon(Icons.delete,
+                          color: Color(0xFFEF4444), size: 20),
                       onPressed: () {
                         _handleDeleteTask(context, task);
                       },
@@ -345,7 +356,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => TaskDetailsScreen(task: task),
+              builder: (_) => TaskDetailsScreen(
+                task: task,
+                organizationId: widget.organizationId,
+              ),
             ),
           ).then((result) {
             // Refresh task list and financial data when returning
@@ -382,7 +396,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.task_alt_outlined, size: 64, color: Color(0xFFF3F4F6)),
+          const Icon(Icons.task_alt_outlined,
+              size: 64, color: Color(0xFFF3F4F6)),
           const SizedBox(height: 16),
           Text(
             "No tasks yet",
@@ -429,7 +444,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Widget _buildBottomNav(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
+      decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.9),
+          border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
       child: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFF137FEC),
@@ -441,41 +458,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
         selectedFontSize: 10,
         unselectedFontSize: 10,
         onTap: (index) {
-          if (index == 0) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => OrganizationDashboard(
-                  organization: {
-                    'id': widget.organizationId,
-                    'name': 'Organization',
-                  },
-                ),
-              ),
-            );
-          } else if (index == 2) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => FinancialLedgerScreen(
-                  organization: {
-                    'id': widget.organizationId,
-                    'name': 'Organization',
-                  },
-                ),
-              ),
-            );
-          } else if (index == 3) {
-            // Navigate to ProfileScreen
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ProfileScreen(
-                  organizationId: widget.organizationId,
-                ),
-              ),
-            );
+          if (index == 1) {
+            return;
           }
+          Navigator.pop(context, index);
         },
         items: const [
           BottomNavigationBarItem(
@@ -485,7 +471,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
           BottomNavigationBarItem(
               icon: Icon(Icons.account_balance_wallet_outlined),
               label: "Finances"),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline), label: "Profile"),
         ],
       ),
     );

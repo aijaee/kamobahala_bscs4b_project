@@ -13,6 +13,7 @@ class ProjectsViewModel extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   String? _currentOrganizationId;
+  Map<String, double> _projectProgressCache = {};
 
   List<Project> get projects => _projects;
   List<Project> get completedProjects => _completedProjects;
@@ -20,6 +21,7 @@ class ProjectsViewModel extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get currentOrganizationId => _currentOrganizationId;
+  Map<String, double> get projectProgressCache => _projectProgressCache;
 
   /// Fetches all projects for a specific organization
   Future<void> fetchProjects(String orgId) async {
@@ -70,7 +72,7 @@ class ProjectsViewModel extends ChangeNotifier {
         _currentOrganizationId!,
         projectData,
       );
-      
+
       _projects.add(newProject);
 
       _setLoading(false);
@@ -91,7 +93,8 @@ class ProjectsViewModel extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      final updated = await _projectService.updateProjectRepository(projectId, repoConfig);
+      final updated =
+          await _projectService.updateProjectRepository(projectId, repoConfig);
 
       // Update local project list
       final index = _projects.indexWhere((project) => project.id == projectId);
@@ -108,8 +111,7 @@ class ProjectsViewModel extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _errorMessage =
-          'Failed to update project repository: ${e.toString()}';
+      _errorMessage = 'Failed to update project repository: ${e.toString()}';
       _setLoading(false);
       notifyListeners();
       return false;
@@ -147,8 +149,8 @@ class ProjectsViewModel extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      _completedProjects = await _projectService
-          .fetchCompletedProjects(_currentOrganizationId!);
+      _completedProjects =
+          await _projectService.fetchCompletedProjects(_currentOrganizationId!);
       _setLoading(false);
       notifyListeners();
     } catch (e) {
@@ -236,6 +238,10 @@ class ProjectsViewModel extends ChangeNotifier {
       _projects = await _projectService.fetchProjects(orgId);
       _setLoading(false);
       notifyListeners();
+
+      // Load progress for all projects in batch
+      await _loadAllProjectProgress();
+
       return _projects;
     } catch (e) {
       _errorMessage = 'Failed to fetch projects: ${e.toString()}';
@@ -245,6 +251,33 @@ class ProjectsViewModel extends ChangeNotifier {
     }
   }
 
+  /// Batch loads progress for all current projects and caches the results
+  Future<void> _loadAllProjectProgress() async {
+    try {
+      _projectProgressCache.clear();
+
+      for (final project in _projects) {
+        try {
+          final progress =
+              await _taskService.calculateProjectProgress(project.id);
+          _projectProgressCache[project.id] = progress;
+        } catch (e) {
+          print('Error calculating progress for project ${project.id}: $e');
+          _projectProgressCache[project.id] = 0.0;
+        }
+      }
+
+      notifyListeners();
+    } catch (e) {
+      print('Error loading project progress batch: $e');
+    }
+  }
+
+  /// Gets cached progress for a project, returns 0.0 if not cached
+  double getProjectProgressFromCache(String projectId) {
+    return _projectProgressCache[projectId] ?? 0.0;
+  }
+
   /// Clears all project data (used when switching organizations)
   void clearProjects() {
     _projects.clear();
@@ -252,6 +285,7 @@ class ProjectsViewModel extends ChangeNotifier {
     _currentProject = null;
     _currentOrganizationId = null;
     _errorMessage = null;
+    _projectProgressCache.clear();
     notifyListeners();
   }
 }

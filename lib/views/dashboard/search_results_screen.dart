@@ -196,7 +196,10 @@ class _SearchResultsScreenState extends State<SearchResultsScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (_) => TaskDetailsScreen(task: task),
+                builder: (_) => TaskDetailsScreen(
+                  task: task,
+                  organizationId: task['organization_id']?.toString(),
+                ),
               ),
             ).then((_) {
               // Pop back to previous screen after task update

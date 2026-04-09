@@ -36,45 +36,16 @@ class TaskService {
       'project_id': projectId,
       'created_at': DateTime.now().toIso8601String()
     };
-    final response =
-        await _client.from('tasks').insert(data).select().single();
+    final response = await _client.from('tasks').insert(data).select().single();
 
     final task = Task.fromMap(response);
 
-    // Create financial transaction if deduct_from_budget is true and estimated_expense > 0
-    final deductFromBudget = taskData['deduct_from_budget'] as bool? ?? false;
-    final estimatedExpense = (taskData['estimated_expense'] as num?)?.toDouble() ?? 0.0;
-    final organizationId = taskData['organization_id'] as String?;
-    final taskTitle = taskData['title'] as String? ?? 'Task';
-
-    if (deductFromBudget && estimatedExpense > 0 && organizationId != null) {
-      try {
-        final financialService = FinancialService();
-        await financialService.createTransaction(
-          organizationId,
-          {
-            'title': 'Task: $taskTitle',
-            'description': 'Expense for task: $taskTitle',
-            'department': 'Tasks',
-            'transaction_type': 'expense',
-            'amount': estimatedExpense,
-            'occurred_at': DateTime.now().toIso8601String(),
-            'task_id': task.id,
-            'project_id': projectId,
-          },
-        );
-      } catch (e) {
-        print('Error creating financial transaction for task: $e');
-        // Don't fail the task creation if transaction fails
-        // Just log the error
-      }
-    }
+    await _syncTaskFinancialTransaction(task.id, taskData);
 
     return task;
   }
 
-  Future<Task> updateTask(
-      String taskId, Map<String, dynamic> updates) async {
+  Future<Task> updateTask(String taskId, Map<String, dynamic> updates) async {
     final response = await _client
         .from('tasks')
         .update(updates)
@@ -84,12 +55,70 @@ class TaskService {
 
     final task = Task.fromMap(response);
 
-    // Handle financial transaction updates if needed
-    // If estimated_expense or deduct_from_budget changed, we might need to update transactions
-    // For now, just return the updated task
-    // TODO: Implement transaction updates if financial details changed
+    await _syncTaskFinancialTransaction(taskId, response);
 
     return task;
+  }
+
+  Future<void> _syncTaskFinancialTransaction(
+    String taskId,
+    Map<String, dynamic> taskData,
+  ) async {
+    final organizationId = taskData['organization_id'] as String?;
+    final projectId = taskData['project_id'] as String?;
+    final estimatedExpense =
+        (taskData['estimated_expense'] as num?)?.toDouble() ?? 0.0;
+
+    try {
+      await _client
+          .from('financial_transactions')
+          .delete()
+          .eq('task_id', taskId);
+
+      if (organizationId == null || estimatedExpense <= 0) {
+        return;
+      }
+
+      final deductFromBudget = taskData['deduct_from_budget'] as bool? ?? false;
+      final taskTitle = taskData['title'] as String? ?? 'Task';
+      final projectName = await _getProjectName(projectId);
+
+      final financialService = FinancialService();
+      await financialService.createTransaction(
+        organizationId,
+        {
+          'title': 'Task: $taskTitle',
+          'description': deductFromBudget
+              ? 'Expense for task: $taskTitle (Project: $projectName)'
+              : 'Income for task: $taskTitle (Project: $projectName)',
+          'department': 'Tasks',
+          'transaction_type': deductFromBudget ? 'expense' : 'income',
+          'amount': estimatedExpense,
+          'occurred_at': DateTime.now().toIso8601String(),
+          'task_id': taskId,
+          'project_id': projectId,
+        },
+      );
+    } catch (e) {
+      print('Error syncing financial transaction for task: $e');
+    }
+  }
+
+  Future<String> _getProjectName(String? projectId) async {
+    if (projectId == null || projectId.isEmpty) {
+      return 'Unknown Project';
+    }
+
+    try {
+      final response = await _client
+          .from('projects')
+          .select('name')
+          .eq('id', projectId)
+          .maybeSingle();
+      return (response?['name'] as String?) ?? 'Unknown Project';
+    } catch (_) {
+      return 'Unknown Project';
+    }
   }
 
   Future<bool> deleteTask(String taskId) async {
@@ -109,10 +138,7 @@ class TaskService {
       } catch (e) {
         // Transactions may not exist
       }
-      await _client
-          .from('tasks')
-          .delete()
-          .eq('id', taskId);
+      await _client.from('tasks').delete().eq('id', taskId);
       await Future.delayed(const Duration(milliseconds: 100));
       final verifyDelete = await _client
           .from('tasks')
@@ -125,11 +151,10 @@ class TaskService {
       rethrow;
     }
   }
+
   Future<int> getCompletedTaskCount(String projectId) async {
-    final response = await _client
-        .from('tasks')
-        .select()
-        .eq('project_id', projectId);
+    final response =
+        await _client.from('tasks').select().eq('project_id', projectId);
     final completedTasks = (response as List).where((task) {
       return (task['status'] ?? '').toString().toLowerCase() == 'completed';
     }).length;
@@ -139,10 +164,8 @@ class TaskService {
 
   /// Total task count
   Future<int> getTotalTaskCount(String projectId) async {
-    final response = await _client
-        .from('tasks')
-        .select()
-        .eq('project_id', projectId);
+    final response =
+        await _client.from('tasks').select().eq('project_id', projectId);
 
     return (response as List).length;
   }
@@ -164,7 +187,7 @@ class TaskService {
           .select()
           .eq('user_id', userId)
           .maybeSingle();
-      
+
       return response;
     } catch (e) {
       print('Error fetching user profile: $e');
@@ -180,7 +203,7 @@ class TaskService {
           .select()
           .eq('email', email)
           .maybeSingle();
-      
+
       return response;
     } catch (e) {
       print('Error fetching user profile by email: $e');

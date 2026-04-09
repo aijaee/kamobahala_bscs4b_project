@@ -74,7 +74,8 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       final taskService = TaskService();
       await taskService.fetchProjectTasks(widget.projectId);
 
-      double existingTasksExpenses = 0.0; // TODO: Update with new financial model
+      double existingTasksExpenses =
+          0.0; // TODO: Update with new financial model
 
       // Fetch depository balance from FinancialViewModel
       final financialVM = context.read<FinancialViewModel>();
@@ -88,7 +89,8 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
         );
         openingBudget = currentOrg.budget ?? 0.0;
       }
-      final depositoryBalance = financialVM.calculateAvailableBalance(openingBudget);
+      final depositoryBalance =
+          financialVM.calculateAvailableBalance(openingBudget);
 
       if (mounted) {
         setState(() {
@@ -119,7 +121,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       setState(() {
         _teamMemberEmails = response.map((m) => m.email).toList();
         _categories = categories.map((c) => c['name'] as String).toList();
-        
+
         // Provide default categories if none exist
         if (_categories.isEmpty) {
           _categories = [
@@ -130,7 +132,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             'Testing',
           ];
         }
-        
+
         if (_categories.isNotEmpty) {
           _selectedCategory = _categories.first;
           _selectedExpenseCategory = _categories.first;
@@ -545,17 +547,19 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                             margin: const EdgeInsets.symmetric(horizontal: 4),
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             decoration: BoxDecoration(
-                                color: _selectedPriority == p
+                              color: _selectedPriority == p
                                   ? _getPriorityColor(p).withValues(alpha: 0.2)
                                   : const Color(0xFFF3F4F6),
                               borderRadius: BorderRadius.circular(8),
                               border: _selectedPriority == p
-                                  ? Border.all(color: _getPriorityColor(p), width: 2)
+                                  ? Border.all(
+                                      color: _getPriorityColor(p), width: 2)
                                   : null,
                               boxShadow: _selectedPriority == p
                                   ? [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.05),
+                                      BoxShadow(
+                                          color: Colors.black
+                                              .withValues(alpha: 0.05),
                                           blurRadius: 4)
                                     ]
                                   : null,
@@ -674,7 +678,10 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                Text(_deductFromBudget ? "Estimated Expense" : "Estimated Income",
+                Text(
+                    _deductFromBudget
+                        ? "Estimated Expense"
+                        : "Estimated Income",
                     style: GoogleFonts.inter(fontSize: 15)),
                 const Spacer(),
                 SizedBox(
@@ -719,11 +726,20 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(
-                        color: _deductFromBudget ? const Color(0xFFEF4444).withOpacity(0.2) : const Color(0xFFF3F4F6),
+                        color: _deductFromBudget
+                            ? const Color(0xFFEF4444).withOpacity(0.2)
+                            : const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(8),
-                        border: _deductFromBudget ? Border.all(color: const Color(0xFFEF4444), width: 2) : null,
+                        border: _deductFromBudget
+                            ? Border.all(
+                                color: const Color(0xFFEF4444), width: 2)
+                            : null,
                         boxShadow: _deductFromBudget
-                            ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)]
+                            ? [
+                                BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 4)
+                              ]
                             : null,
                       ),
                       child: Text(
@@ -731,8 +747,12 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 14,
-                          fontWeight: _deductFromBudget ? FontWeight.bold : FontWeight.w500,
-                          color: _deductFromBudget ? const Color(0xFFEF4444) : Colors.black,
+                          fontWeight: _deductFromBudget
+                              ? FontWeight.bold
+                              : FontWeight.w500,
+                          color: _deductFromBudget
+                              ? const Color(0xFFEF4444)
+                              : Colors.black,
                         ),
                       ),
                     ),
@@ -745,11 +765,20 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(
-                        color: !_deductFromBudget ? const Color(0xFF10B981).withOpacity(0.2) : const Color(0xFFF3F4F6),
+                        color: !_deductFromBudget
+                            ? const Color(0xFF10B981).withOpacity(0.2)
+                            : const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(8),
-                        border: !_deductFromBudget ? Border.all(color: const Color(0xFF10B981), width: 2) : null,
+                        border: !_deductFromBudget
+                            ? Border.all(
+                                color: const Color(0xFF10B981), width: 2)
+                            : null,
                         boxShadow: !_deductFromBudget
-                            ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)]
+                            ? [
+                                BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 4)
+                              ]
                             : null,
                       ),
                       child: Text(
@@ -757,8 +786,12 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 14,
-                          fontWeight: !_deductFromBudget ? FontWeight.bold : FontWeight.w500,
-                          color: !_deductFromBudget ? const Color(0xFF10B981) : Colors.black,
+                          fontWeight: !_deductFromBudget
+                              ? FontWeight.bold
+                              : FontWeight.w500,
+                          color: !_deductFromBudget
+                              ? const Color(0xFF10B981)
+                              : Colors.black,
                         ),
                       ),
                     ),

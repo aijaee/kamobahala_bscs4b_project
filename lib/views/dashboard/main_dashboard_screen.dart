@@ -17,8 +17,6 @@ class MainDashboardScreen extends StatefulWidget {
 }
 
 class _MainDashboardScreenState extends State<MainDashboardScreen> {
-
-  // TODO: Implement actual navigation logic and state management for bottom nav
   int currentIndex = 0;
   final AuthService _authService = AuthService();
   final OrganizationService _orgService = OrganizationService();
@@ -221,7 +219,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 ],
               ),
             ),
-
             Expanded(
                 child: RefreshIndicator(
               onRefresh: _fetchData,
@@ -232,7 +229,6 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // TODO: [MVVM] bind UI to ViewModel.isLoading and ViewModel.organizations
                       if (_isLoading)
                         const Center(child: CircularProgressIndicator())
                       else if (!hasOrganizations)
@@ -430,7 +426,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
         child: Column(
           children: [
             Icon(Icons.domain_disabled,
-                size: 80, color: Colors.grey.withOpacity(.3)),
+                size: 80, color: Colors.grey.withValues(alpha: 0.3)),
             const SizedBox(height: 16),
             const Text(
               "No Organizations Joined",

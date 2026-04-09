@@ -198,7 +198,10 @@ class _TasksByCategoryScreenState extends State<TasksByCategoryScreen> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => TaskDetailsScreen(task: task),
+                                builder: (_) => TaskDetailsScreen(
+                                  task: task,
+                                  organizationId: task['organization_id']?.toString(),
+                                ),
                             ),
                           ).then((result) {
                             if (result == true) {

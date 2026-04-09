@@ -55,19 +55,23 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   @override
   void initState() {
     super.initState();
+    final estimatedExpense = _toDouble(widget.task['estimated_expense']) ?? 0.0;
     _taskNameController =
         TextEditingController(text: widget.task['title'] ?? '');
-    _estimatedExpenseController = TextEditingController(text: '0.0');
+    _estimatedExpenseController = TextEditingController(
+      text: estimatedExpense.toStringAsFixed(2),
+    );
     _noteController =
         TextEditingController(text: widget.task['description'] ?? '');
 
     _selectedPriority = widget.task['priority'] ?? 'Low';
     _selectedStatus = widget.task['status'] ?? 'todo';
-    _deductFromBudget = false;
+    _deductFromBudget = widget.task['deduct_from_budget'] as bool? ?? false;
     _selectedCategory = widget.task['category'] ?? 'Uncategorized';
-    _selectedAssignee = widget.task['assignee'];
-    _selectedExpenseCategory = 'Transportation';
-    _originalTaskExpense = 0.0;
+    _selectedAssignee = widget.task['assignee_id'] ?? widget.task['assignee'];
+    _selectedExpenseCategory =
+        widget.task['expense_category']?.toString() ?? 'Transportation';
+    _originalTaskExpense = estimatedExpense;
 
     if (_selectedAssignee != null) {
       _loadAssigneeFullName(_selectedAssignee!);
@@ -79,6 +83,14 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
 
     _loadTeamData();
     _loadProjectFinancials();
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
   }
 
   Future<void> _loadProjectFinancials() async {
@@ -111,7 +123,8 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
         );
         openingBudget = currentOrg.budget ?? 0.0;
       }
-      final depositoryBalance = financialVM.calculateAvailableBalance(openingBudget);
+      final depositoryBalance =
+          financialVM.calculateAvailableBalance(openingBudget);
 
       if (mounted) {
         setState(() {
@@ -142,7 +155,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       setState(() {
         _teamMembers = response;
         _categories = categories.map((c) => c['name'] as String).toList();
-        
+
         // Provide default categories if none exist
         if (_categories.isEmpty) {
           _categories = [
@@ -153,7 +166,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
             'Testing',
           ];
         }
-        
+
         _isLoadingData = false;
       });
     } catch (e) {
@@ -167,7 +180,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   Future<void> _loadAssigneeFullName(String email) async {
     try {
       final member = _teamMembers.firstWhere(
-        (m) => m.email == email,
+        (m) => m.email == email || m.userId == email,
       );
       if (mounted) {
         setState(() {
@@ -605,7 +618,8 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                                   : const Color(0xFFF3F4F6),
                               borderRadius: BorderRadius.circular(8),
                               border: _selectedPriority == p
-                                  ? Border.all(color: _getPriorityColor(p), width: 2)
+                                  ? Border.all(
+                                      color: _getPriorityColor(p), width: 2)
                                   : null,
                               boxShadow: _selectedPriority == p
                                   ? [
@@ -829,11 +843,20 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(
-                        color: _deductFromBudget ? const Color(0xFFEF4444).withOpacity(0.2) : const Color(0xFFF3F4F6),
+                        color: _deductFromBudget
+                            ? const Color(0xFFEF4444).withOpacity(0.2)
+                            : const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(8),
-                        border: _deductFromBudget ? Border.all(color: const Color(0xFFEF4444), width: 2) : null,
+                        border: _deductFromBudget
+                            ? Border.all(
+                                color: const Color(0xFFEF4444), width: 2)
+                            : null,
                         boxShadow: _deductFromBudget
-                            ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)]
+                            ? [
+                                BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 4)
+                              ]
                             : null,
                       ),
                       child: Text(
@@ -841,8 +864,12 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 14,
-                          fontWeight: _deductFromBudget ? FontWeight.bold : FontWeight.w500,
-                          color: _deductFromBudget ? const Color(0xFFEF4444) : Colors.black,
+                          fontWeight: _deductFromBudget
+                              ? FontWeight.bold
+                              : FontWeight.w500,
+                          color: _deductFromBudget
+                              ? const Color(0xFFEF4444)
+                              : Colors.black,
                         ),
                       ),
                     ),
@@ -855,11 +882,20 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(
-                        color: !_deductFromBudget ? const Color(0xFF10B981).withOpacity(0.2) : const Color(0xFFF3F4F6),
+                        color: !_deductFromBudget
+                            ? const Color(0xFF10B981).withOpacity(0.2)
+                            : const Color(0xFFF3F4F6),
                         borderRadius: BorderRadius.circular(8),
-                        border: !_deductFromBudget ? Border.all(color: const Color(0xFF10B981), width: 2) : null,
+                        border: !_deductFromBudget
+                            ? Border.all(
+                                color: const Color(0xFF10B981), width: 2)
+                            : null,
                         boxShadow: !_deductFromBudget
-                            ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)]
+                            ? [
+                                BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 4)
+                              ]
                             : null,
                       ),
                       child: Text(
@@ -867,8 +903,12 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 14,
-                          fontWeight: !_deductFromBudget ? FontWeight.bold : FontWeight.w500,
-                          color: !_deductFromBudget ? const Color(0xFF10B981) : Colors.black,
+                          fontWeight: !_deductFromBudget
+                              ? FontWeight.bold
+                              : FontWeight.w500,
+                          color: !_deductFromBudget
+                              ? const Color(0xFF10B981)
+                              : Colors.black,
                         ),
                       ),
                     ),

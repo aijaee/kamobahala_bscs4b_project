@@ -64,20 +64,15 @@ class AuthService {
           .select('full_name')
           .eq('email', email)
           .maybeSingle();
-      
+
       String? fullName = userProfile?['full_name'] as String?;
 
       // Update all organization_members entries with this email to link them to the user and set name
-      await _client
-          .from('organization_members')
-          .update({
-            'user_id': userId,
-            'name': fullName,
-          })
-          .eq('email', email);
+      await _client.from('organization_members').update({
+        'user_id': userId,
+        'name': fullName,
+      }).eq('email', email);
     } catch (e) {
-      // Silently handle linking errors - user can still function without this
-      print('Error linking user to pending organizations: $e');
     }
   }
 

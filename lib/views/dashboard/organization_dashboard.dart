@@ -116,8 +116,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   }
 
   Future<void> _checkAdminStatus() async {
-    final isAdmin = await _adminService
-        .isUserAdmin(widget.organization['id'].toString());
+    final isAdmin =
+        await _adminService.isUserAdmin(widget.organization['id'].toString());
     if (mounted) {
       setState(() => _isAdmin = isAdmin);
     }
@@ -215,10 +215,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     final allTransactions = _financialViewModel.transactions;
 
     final matchingTasks = allTasks
-        .where((task) => (task['title'] ?? '')
-            .toString()
-            .toLowerCase()
-            .contains(queryLower))
+        .where((task) =>
+            (task['title'] ?? '').toString().toLowerCase().contains(queryLower))
         .take(3)
         .toList();
 
@@ -233,9 +231,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     }
 
     final matchingProjects = allProjects
-        .where((project) => project.name
-            .toLowerCase()
-            .contains(queryLower))
+        .where((project) => project.name.toLowerCase().contains(queryLower))
         .take(3)
         .toList();
 
@@ -255,9 +251,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
 
     final matchingTransactions = allTransactions
         .where((transaction) =>
-            transaction.title
-                .toLowerCase()
-                .contains(queryLower))
+            transaction.title.toLowerCase().contains(queryLower))
         .take(2)
         .toList();
 
@@ -265,8 +259,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       suggestions.add({
         'type': 'transaction',
         'title': transaction.title,
-        'subtitle':
-            '₱${transaction.amount.toStringAsFixed(2)}',
+        'subtitle': '₱${transaction.amount.toStringAsFixed(2)}',
         'icon': Icons.account_balance_wallet_outlined,
         'data': transaction,
       });
@@ -289,7 +282,10 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => TaskDetailsScreen(task: data),
+          builder: (_) => TaskDetailsScreen(
+            task: data,
+            organizationId: widget.organization['id'].toString(),
+          ),
         ),
       ).then((taskUpdated) {
         if (taskUpdated == true && mounted) {
@@ -315,49 +311,52 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Stack(
-        children: [
-          RefreshIndicator(
-            onRefresh: _refreshDashboard,
-            color: const Color(0xFF137FEC),
-            backgroundColor: Colors.white,
-            child: CustomScrollView(
-              slivers: [
-                _buildHeader(),
-                SliverPadding(
-                  padding: const EdgeInsets.all(16.0),
-                  sliver: SliverList(
-                    delegate: SliverChildListDelegate([
-                      _buildFinancialCard(context),
-                      const SizedBox(height: 24),
-                      _buildSectionHeader(
-                        _isAdmin ? "Priority Overview" : "Tasks Assigned",
-                        "View All",
-                        onPressed: () {
-                          _showAllTasksModal(context);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      _buildDeadlinesList(context),
-                      const SizedBox(height: 24),
-                      _buildSectionHeader(
-                        "Active Projects",
-                        "See All",
-                        onPressed: () {
-                          widget.onTabChange?.call(1);
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      _buildProjectsListFromViewModel(context),
-                      const SizedBox(height: 100),
-                    ]),
+    return Material(
+      color: Colors.white,
+      child: SafeArea(
+        child: Stack(
+          children: [
+            RefreshIndicator(
+              onRefresh: _refreshDashboard,
+              color: const Color(0xFF137FEC),
+              backgroundColor: Colors.white,
+              child: CustomScrollView(
+                slivers: [
+                  _buildHeader(),
+                  SliverPadding(
+                    padding: const EdgeInsets.all(16.0),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        _buildFinancialCard(context),
+                        const SizedBox(height: 24),
+                        _buildSectionHeader(
+                          _isAdmin ? "Priority Overview" : "Tasks Assigned",
+                          "View All",
+                          onPressed: () {
+                            _showAllTasksModal(context);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildDeadlinesList(context),
+                        const SizedBox(height: 24),
+                        _buildSectionHeader(
+                          "Active Projects",
+                          "See All",
+                          onPressed: () {
+                            widget.onTabChange?.call(1);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _buildProjectsListFromViewModel(context),
+                        const SizedBox(height: 100),
+                      ]),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -421,14 +420,12 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                           )
                         : null,
                     filled: true,
-                    fillColor:
-                        const Color(0xFFE5E7EB).withOpacity(0.5),
+                    fillColor: const Color(0xFFE5E7EB).withOpacity(0.5),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide.none,
                     ),
-                    contentPadding:
-                        const EdgeInsets.symmetric(vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
                 // Suggestions dropdown
@@ -641,8 +638,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(title,
-            style: GoogleFonts.inter(
-                fontSize: 18, fontWeight: FontWeight.bold)),
+            style:
+                GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold)),
         TextButton(
           onPressed: onPressed,
           child: Text(actionText,
@@ -735,18 +732,17 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
 
             if (cardTitle == 'High Priority') {
               filteredTasks = allTasks
-                  .where((t) =>
-                      (t['priority'] ?? 'Low').toLowerCase() == 'high')
+                  .where(
+                      (t) => (t['priority'] ?? 'Low').toLowerCase() == 'high')
                   .toList();
             } else if (cardTitle == 'Medium Priority') {
               filteredTasks = allTasks
-                  .where((t) =>
-                      (t['priority'] ?? 'Low').toLowerCase() == 'medium')
+                  .where(
+                      (t) => (t['priority'] ?? 'Low').toLowerCase() == 'medium')
                   .toList();
             } else if (cardTitle == 'Low Priority') {
               filteredTasks = allTasks
-                  .where(
-                      (t) => (t['priority'] ?? 'Low').toLowerCase() == 'low')
+                  .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'low')
                   .toList();
             } else {
               filteredTasks = assignedTasks;
@@ -877,8 +873,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
         'count': mediumCount,
         'color': 0xFFF97316,
         'icon': Icons.warning,
-        'subtitle':
-            '$mediumCount task${mediumCount != 1 ? 's' : ''} assigned',
+        'subtitle': '$mediumCount task${mediumCount != 1 ? 's' : ''} assigned',
       },
       {
         'title': 'Low Priority',
@@ -918,18 +913,17 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
 
             if (cardTitle == 'High Priority') {
               filteredTasks = allAssignedTasks
-                  .where((t) =>
-                      (t['priority'] ?? 'Low').toLowerCase() == 'high')
+                  .where(
+                      (t) => (t['priority'] ?? 'Low').toLowerCase() == 'high')
                   .toList();
             } else if (cardTitle == 'Medium Priority') {
               filteredTasks = allAssignedTasks
-                  .where((t) =>
-                      (t['priority'] ?? 'Low').toLowerCase() == 'medium')
+                  .where(
+                      (t) => (t['priority'] ?? 'Low').toLowerCase() == 'medium')
                   .toList();
             } else if (cardTitle == 'Low Priority') {
               filteredTasks = allAssignedTasks
-                  .where((t) =>
-                      (t['priority'] ?? 'Low').toLowerCase() == 'low')
+                  .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'low')
                   .toList();
             } else {
               filteredTasks = overdueTasks;
@@ -1142,8 +1136,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                             ],
                           ),
                         ),
-                        const Divider(
-                            height: 1, color: Color(0xFFF3F4F6)),
+                        const Divider(height: 1, color: Color(0xFFF3F4F6)),
                         Expanded(
                           child: ListView.builder(
                             controller: scrollController,
@@ -1164,8 +1157,12 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (context) =>
-                                            TaskDetailsScreen(task: task),
+                                        builder: (context) => TaskDetailsScreen(
+                                          task: task,
+                                          organizationId: widget
+                                              .organization['id']
+                                              .toString(),
+                                        ),
                                       ),
                                     ).then((taskUpdated) {
                                       if (taskUpdated == true && mounted) {
@@ -1187,8 +1184,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                         ),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: urgencyColor
-                                                .withOpacity(0.08),
+                                            color:
+                                                urgencyColor.withOpacity(0.08),
                                             blurRadius: 8,
                                             offset: const Offset(0, 2),
                                           ),
@@ -1209,8 +1206,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                                   color: urgencyColor
                                                       .withOpacity(0.1),
                                                   borderRadius:
-                                                      BorderRadius.circular(
-                                                          6),
+                                                      BorderRadius.circular(6),
                                                 ),
                                                 child: Icon(
                                                   Icons.priority_high,
@@ -1222,14 +1218,12 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                               Expanded(
                                                 child: Column(
                                                   crossAxisAlignment:
-                                                      CrossAxisAlignment
-                                                          .start,
+                                                      CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
                                                       task['title'] ??
                                                           'Untitled Task',
-                                                      style:
-                                                          GoogleFonts.inter(
+                                                      style: GoogleFonts.inter(
                                                         fontSize: 14,
                                                         fontWeight:
                                                             FontWeight.w600,
@@ -1237,18 +1231,16 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                                             0xFF111418),
                                                       ),
                                                       maxLines: 2,
-                                                      overflow: TextOverflow
-                                                          .ellipsis,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
                                                     ),
                                                     const SizedBox(height: 4),
                                                     Text(
                                                       task['projectName'] ??
                                                           'No Project',
-                                                      style:
-                                                          GoogleFonts.inter(
+                                                      style: GoogleFonts.inter(
                                                         fontSize: 12,
-                                                        color:
-                                                            Colors.grey[600],
+                                                        color: Colors.grey[600],
                                                       ),
                                                     ),
                                                   ],
@@ -1259,12 +1251,11 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                           const SizedBox(height: 12),
                                           Row(
                                             mainAxisAlignment:
-                                                MainAxisAlignment
-                                                    .spaceBetween,
+                                                MainAxisAlignment.spaceBetween,
                                             children: [
                                               Container(
-                                                padding: const EdgeInsets
-                                                    .symmetric(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
                                                   horizontal: 8,
                                                   vertical: 4,
                                                 ),
@@ -1272,8 +1263,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                                   color: urgencyColor
                                                       .withOpacity(0.1),
                                                   borderRadius:
-                                                      BorderRadius.circular(
-                                                          6),
+                                                      BorderRadius.circular(6),
                                                 ),
                                                 child: Text(
                                                   priorityInfo['label']
@@ -1281,15 +1271,13 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                                   style: GoogleFonts.inter(
                                                     fontSize: 11,
                                                     color: urgencyColor,
-                                                    fontWeight:
-                                                        FontWeight.w600,
+                                                    fontWeight: FontWeight.w600,
                                                   ),
                                                 ),
                                               ),
                                               if (task['due_date'] != null)
                                                 Text(
-                                                  _formatDate(
-                                                      task['due_date']),
+                                                  _formatDate(task['due_date']),
                                                   style: GoogleFonts.inter(
                                                     fontSize: 11,
                                                     color: Colors.grey[600],
@@ -1374,7 +1362,10 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
             itemCount: projectsViewModel.projects.length,
             itemBuilder: (context, index) {
               final project = projectsViewModel.projects[index];
-              final progress = 0.0; // Progress calculated from tasks
+              // Use cached progress instead of individual FutureBuilder calls
+              final progress = projectsViewModel
+                  .getProjectProgressFromCache(project.id)
+                  .clamp(0.0, 1.0);
 
               return Padding(
                 padding: EdgeInsets.only(
