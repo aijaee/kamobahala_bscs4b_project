@@ -46,7 +46,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    _financialViewModel = FinancialViewModel();
+    _financialViewModel = context.read<FinancialViewModel>();
     _dashboardViewModel = OrganizationDashboardViewModel(
       financialViewModel: _financialViewModel,
     );
@@ -90,7 +90,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   }
 
   void _initializeViewModels() {
-    _financialViewModel = FinancialViewModel();
+    _financialViewModel = context.read<FinancialViewModel>();
     _dashboardViewModel = OrganizationDashboardViewModel(
       financialViewModel: _financialViewModel,
     );
@@ -107,7 +107,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   void _cleanupViewModels() {
     _financialViewModel.removeListener(_onViewModelChanged);
     _dashboardViewModel.removeListener(_onViewModelChanged);
-    _financialViewModel.dispose();
     _dashboardViewModel.dispose();
   }
 
@@ -525,6 +524,10 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   }
 
   Widget _buildFinancialCard(BuildContext context) {
+    final fallbackOpeningBudget = _toDouble(widget.organization['budget']);
+    final currentBalance =
+      _financialViewModel.calculateAvailableBalance(fallbackOpeningBudget);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -590,7 +593,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
           Text(
             _balanceHidden
                 ? "••••••••"
-                : _formatCurrency(_dashboardViewModel.currentBalance),
+                : _formatCurrency(currentBalance),
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 30,
@@ -630,6 +633,16 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       if (reversedIndex > 1 && reversedIndex % 3 == 1) buffer.write(',');
     }
     return '${amount < 0 ? '-₱' : '₱'}${buffer.toString()}.$decimals';
+  }
+
+  double _toDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value) ?? 0.0;
+    }
+    return 0.0;
   }
 
   Widget _buildSectionHeader(String title, String actionText,

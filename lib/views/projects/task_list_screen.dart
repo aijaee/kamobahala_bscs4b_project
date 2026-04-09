@@ -61,19 +61,22 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final newStatus = isMarkedComplete ? 'completed' : 'todo';
 
     // Update task status
-    Provider.of<TasksViewModel>(context, listen: false)
-        .updateTask(taskId, {'status': newStatus});
+    final tasksViewModel = Provider.of<TasksViewModel>(context, listen: false);
+    final updateSuccess = await tasksViewModel.updateTask(
+      taskId,
+      {'status': newStatus},
+    );
+
+    if (!updateSuccess) {
+      return;
+    }
 
     // If marking as completed, refresh the task list for progress calculation
     if (isMarkedComplete) {
-      // TODO: [REFACTORING] Financial tracking for tasks needs to be re-implemented
-      // The Task model no longer stores estimated_expense, deduct_from_budget, expense_category
-      // These should be stored in a separate financial tracking system or FinancialTransaction model
-
       if (mounted) {
-        Provider.of<TasksViewModel>(context, listen: false)
+        await Provider.of<TasksViewModel>(context, listen: false)
             .fetchProjectTasks(widget.projectId);
-        Provider.of<FinancialViewModel>(context, listen: false)
+        await Provider.of<FinancialViewModel>(context, listen: false)
             .fetchTransactions(widget.organizationId);
       }
     } else {
@@ -82,9 +85,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
         final success = await _financialService.deleteTaskTransactions(taskId);
         if (success && mounted) {
           // Refresh both task list and financial data after deletion
-          Provider.of<TasksViewModel>(context, listen: false)
+          await Provider.of<TasksViewModel>(context, listen: false)
               .fetchProjectTasks(widget.projectId);
-          Provider.of<FinancialViewModel>(context, listen: false)
+          await Provider.of<FinancialViewModel>(context, listen: false)
               .fetchTransactions(widget.organizationId);
         }
       } catch (e) {

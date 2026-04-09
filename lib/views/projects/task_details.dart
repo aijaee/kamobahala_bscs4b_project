@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'edit_task_screen.dart';
 import '../../viewmodels/tasks_viewmodel.dart';
+import '../../viewmodels/financial_viewmodel.dart';
 import '../../models/task.dart';
 import '../../models/organization_member.dart';
 import '../../core/services/admin_service.dart';
@@ -87,6 +88,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
       // Get viewmodels from Provider
       final tasksViewModel = context.read<TasksViewModel>();
+      final financialViewModel = context.read<FinancialViewModel>();
 
       // Update task status through ViewModel (this will notify listeners)
       final updateSuccess =
@@ -106,6 +108,11 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
           _currentStatus = newStatus == 'completed' ? 'Completed' : 'To Do';
           _taskUpdated = true;
         });
+
+        final organizationId = widget.organizationId;
+        if (organizationId != null) {
+          await financialViewModel.fetchTransactions(organizationId);
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodels/financial_viewmodel.dart';
-import '../../viewmodels/organization_dashboard_viewmodel.dart';
 import '../../core/services/admin_service.dart';
 import '../../models/financial_transaction.dart';
 
@@ -24,7 +23,6 @@ class FinancialLedgerScreen extends StatefulWidget {
 class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   late int currentIndex;
   late FinancialViewModel _viewModel;
-  late OrganizationDashboardViewModel _dashboardViewModel;
   bool _isAdmin = false;
   final AdminService _adminService = AdminService();
   bool _balanceHidden = true;
@@ -35,9 +33,6 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     currentIndex = widget.initialIndex;
     // Use the global FinancialViewModel from Provider
     _viewModel = context.read<FinancialViewModel>();
-    _dashboardViewModel = OrganizationDashboardViewModel(
-      financialViewModel: _viewModel,
-    );
     _fetchTransactions();
     _checkAdminStatus();
     _viewModel.addListener(_onViewModelChanged);
@@ -53,28 +48,18 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   @override
   void dispose() {
     _viewModel.removeListener(_onViewModelChanged);
-    // Note: Don't dispose of _viewModel since it's managed by Provider
-    _dashboardViewModel.dispose();
     super.dispose();
   }
 
   void _onViewModelChanged() {
-    setState(() {
-      // Update balance calculation when transactions change
-      _dashboardViewModel.calculateFinancialSummary(
-        widget.organization,
-        _viewModel.transactions,
-      );
-    });
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   /// Fetches transactions for the organization
   Future<void> _fetchTransactions() async {
     await _viewModel.fetchTransactions(widget.organization['id'].toString());
-    _dashboardViewModel.calculateFinancialSummary(
-      widget.organization,
-      _viewModel.transactions,
-    );
   }
 
   @override
@@ -103,10 +88,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
                 _buildEmptyState()
               else
                 ...groupedTransactions.expand(
-                  (group) => [
-                    _buildDateHeader(group.$1),
-                    ...group.$2.map(_buildTransactionRow),
-                  ],
+                  (group) => _buildDateTransactionSection(group.$1, group.$2),
                 ),
             ],
           ),
@@ -119,6 +101,10 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
 
   /// Builds the balance card using ViewModel balance
   Widget _buildBalanceCard() {
+    final fallbackOpeningBudget = _toDouble(widget.organization['budget']);
+    final currentBalance =
+        _viewModel.calculateAvailableBalance(fallbackOpeningBudget);
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(24),
@@ -184,7 +170,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
           Text(
             _balanceHidden
                 ? "••••••••"
-                : _formatCurrency(_dashboardViewModel.currentBalance),
+                : _formatCurrency(currentBalance),
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 36,
@@ -253,7 +239,104 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     );
   }
 
-  Widget _buildTransactionRow(FinancialTransaction transaction) {
+  List<Widget> _buildDateTransactionSection(
+    String dateHeader,
+    List<FinancialTransaction> transactions,
+  ) {
+    final standaloneTransactions = <FinancialTransaction>[];
+    final Map<String, List<FinancialTransaction>> projectTaskGroups = {};
+    final Map<String, String> projectLabels = {};
+
+    for (final transaction in transactions) {
+      final isTaskTransaction =
+          (transaction.taskId?.trim().isNotEmpty ?? false) ||
+          transaction.title.toLowerCase().startsWith('task:');
+
+      if (!isTaskTransaction) {
+        standaloneTransactions.add(transaction);
+        continue;
+      }
+
+      final projectKey = (transaction.projectId?.trim().isNotEmpty ?? false)
+          ? transaction.projectId!.trim()
+          : _extractProjectNameFromTransaction(transaction).toLowerCase();
+      projectTaskGroups.putIfAbsent(projectKey, () => []).add(transaction);
+      projectLabels.putIfAbsent(
+        projectKey,
+        () => _extractProjectNameFromTransaction(transaction),
+      );
+    }
+
+    final section = <Widget>[_buildDateHeader(dateHeader)];
+    section.addAll(standaloneTransactions.map(_buildTransactionRow));
+
+    for (final entry in projectTaskGroups.entries) {
+      final projectName = projectLabels[entry.key] ?? 'Project';
+      section.add(_buildProjectGroupHeader(projectName));
+      section.addAll(
+        entry.value.map((transaction) => _buildTransactionRow(
+              transaction,
+              isProjectChild: true,
+            )),
+      );
+    }
+
+    return section;
+  }
+
+  Widget _buildProjectGroupHeader(String projectName) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      color: const Color(0xFFF8FAFC),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.folder_open,
+            size: 14,
+            color: Color(0xFF617589),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Project: $projectName',
+            style: GoogleFonts.inter(
+              color: const Color(0xFF617589),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _extractProjectNameFromTransaction(FinancialTransaction transaction) {
+    final description = transaction.description ?? '';
+    final match = RegExp(
+      r'\(Project:\s*([^\)]+)\)',
+      caseSensitive: false,
+    ).firstMatch(description);
+    if (match != null) {
+      final projectName = match.group(1)?.trim();
+      if (projectName != null && projectName.isNotEmpty) {
+        return projectName;
+      }
+    }
+
+    final title = transaction.title;
+    if (title.startsWith('Budget Allocation:')) {
+      return title.replaceFirst('Budget Allocation:', '').trim();
+    }
+    if (title.startsWith('Budget Adjustment:')) {
+      return title.replaceFirst('Budget Adjustment:', '').trim();
+    }
+
+    return 'Project';
+  }
+
+  Widget _buildTransactionRow(
+    FinancialTransaction transaction, {
+    bool isProjectChild = false,
+  }) {
     final amount = transaction.isIncome ? transaction.amount : -transaction.amount;
     final occurredAt = transaction.occurredAt;
     final department =
@@ -273,7 +356,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     bool isIncome = amount > 0 && !isBudgetAllocation;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.fromLTRB(isProjectChild ? 40 : 16, 12, 16, 12),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Color(0x0D137FEC))),
@@ -339,11 +422,9 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                isBudgetAllocation
+                amount == 0
                     ? _formatCurrency(amount.abs())
-                    : amount == 0 
-                        ? _formatCurrency(amount.abs())
-                        : '${isIncome ? '+' : '-'}${_formatCurrency(amount.abs())}',
+                    : '${amount > 0 ? '+' : '-'}${_formatCurrency(amount.abs())}',
                 style: GoogleFonts.inter(
                   color: isBudgetAllocation
                       ? const Color(
@@ -450,6 +531,16 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     }
 
     return '₱${buffer.toString()}.$decimals';
+  }
+
+  double _toDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value) ?? 0.0;
+    }
+    return 0.0;
   }
 
   Color _departmentColor(String department) {
@@ -693,10 +784,10 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
             title.toLowerCase().contains('budget adjustment');
 
     if (isExpense && !isBudgetAllocation) {
-        final openingBudget =
-          (widget.organization['budget'] as num?)?.toDouble() ?? 0.0;
-      final transactionSum = widget.viewModel.currentBalance;
-      final totalAvailableBalance = openingBudget + transactionSum;
+      final openingBudget =
+        (widget.organization['budget'] as num?)?.toDouble() ?? 0.0;
+      final totalAvailableBalance =
+        widget.viewModel.calculateAvailableBalance(openingBudget);
 
       if (amount > totalAvailableBalance) {
         setState(() {
