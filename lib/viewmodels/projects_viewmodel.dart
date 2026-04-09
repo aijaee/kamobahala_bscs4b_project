@@ -1,22 +1,21 @@
 import 'package:flutter/material.dart';
 import '../core/services/project_service.dart';
 import '../core/services/task_service.dart';
-import '../models/project.dart';
 
 class ProjectsViewModel extends ChangeNotifier {
   final ProjectService _projectService = ProjectService();
   final TaskService _taskService = TaskService();
 
-  List<Project> _projects = [];
-  List<Project> _completedProjects = [];
-  Project? _currentProject;
+  List<Map<String, dynamic>> _projects = [];
+  List<Map<String, dynamic>> _completedProjects = [];
+  Map<String, dynamic>? _currentProject;
   bool _isLoading = false;
   String? _errorMessage;
   String? _currentOrganizationId;
 
-  List<Project> get projects => _projects;
-  List<Project> get completedProjects => _completedProjects;
-  Project? get currentProject => _currentProject;
+  List<Map<String, dynamic>> get projects => _projects;
+  List<Map<String, dynamic>> get completedProjects => _completedProjects;
+  Map<String, dynamic>? get currentProject => _currentProject;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get currentOrganizationId => _currentOrganizationId;
@@ -91,17 +90,18 @@ class ProjectsViewModel extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      final updated = await _projectService.updateProjectRepository(projectId, repoConfig);
+      await _projectService.updateProjectRepository(projectId, repoConfig);
 
       // Update local project list
-      final index = _projects.indexWhere((project) => project.id == projectId);
+      final index =
+          _projects.indexWhere((project) => project['id'] == projectId);
       if (index != -1) {
-        _projects[index] = updated;
+        _projects[index] = {..._projects[index], ...repoConfig};
       }
 
       // Update current project if it matches
-      if (_currentProject != null && _currentProject!.id == projectId) {
-        _currentProject = updated;
+      if (_currentProject != null && _currentProject!['id'] == projectId) {
+        _currentProject = {..._currentProject!, ...repoConfig};
       }
 
       _setLoading(false);
@@ -168,13 +168,13 @@ class ProjectsViewModel extends ChangeNotifier {
       final updated = await _projectService.updateProject(projectId, updates);
 
       // Update local project list
-      final index = _projects.indexWhere((p) => p.id == projectId);
+      final index = _projects.indexWhere((p) => p['id'] == projectId);
       if (index != -1) {
         _projects[index] = updated;
       }
 
       // Update current project if it matches
-      if (_currentProject != null && _currentProject!.id == projectId) {
+      if (_currentProject != null && _currentProject!['id'] == projectId) {
         _currentProject = updated;
       }
 
@@ -198,10 +198,10 @@ class ProjectsViewModel extends ChangeNotifier {
       await _projectService.deleteProject(projectId);
 
       // Remove from local project list
-      _projects.removeWhere((p) => p.id == projectId);
+      _projects.removeWhere((p) => p['id'] == projectId);
 
       // Clear current project if it matches
-      if (_currentProject != null && _currentProject!.id == projectId) {
+      if (_currentProject != null && _currentProject!['id'] == projectId) {
         _currentProject = null;
       }
 
@@ -227,31 +227,27 @@ class ProjectsViewModel extends ChangeNotifier {
   }
 
   /// Fetches all projects with progress data
-  Future<List<Project>> fetchProjectsWithProgress(String orgId) async {
+  Future<List<Map<String, dynamic>>> fetchProjectsWithProgress(String orgId) async {
     _setLoading(true);
     _errorMessage = null;
     _currentOrganizationId = orgId;
 
     try {
       _projects = await _projectService.fetchProjects(orgId);
+      
+      // Add progress to each project
+      for (var project in _projects) {
+        final progress = await getProjectProgress(project['id']);
+        project['progress'] = progress;
+      }
+      
       _setLoading(false);
       notifyListeners();
-      return _projects;
     } catch (e) {
       _errorMessage = 'Failed to fetch projects: ${e.toString()}';
       _setLoading(false);
       notifyListeners();
-      return [];
     }
-  }
-
-  /// Clears all project data (used when switching organizations)
-  void clearProjects() {
-    _projects.clear();
-    _completedProjects.clear();
-    _currentProject = null;
-    _currentOrganizationId = null;
-    _errorMessage = null;
-    notifyListeners();
+    return _projects;
   }
 }

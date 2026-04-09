@@ -7,7 +7,6 @@ import '../dashboard/financial_ledger.dart';
 import '../profile/profile_screen.dart';
 import '../../core/services/admin_service.dart';
 import '../../viewmodels/projects_viewmodel.dart';
-import '../../viewmodels/financial_viewmodel.dart';
 
 class MainNavigationWrapper extends StatefulWidget {
   final Map<String, dynamic> organization;
@@ -34,37 +33,6 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
     super.initState();
     currentIndex = widget.initialIndex;
     _checkAdminStatus();
-    _refreshViewModels();
-  }
-
-  @override
-  void didUpdateWidget(MainNavigationWrapper oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // If organization changed, refresh all view models
-    if (oldWidget.organization['id'] != widget.organization['id']) {
-      _checkAdminStatus();
-      _refreshViewModels();
-    }
-  }
-
-  Future<void> _refreshViewModels() async {
-    if (!mounted) return;
-    
-    try {
-      final orgId = widget.organization['id'].toString();
-      
-      // Refresh Projects ViewModel
-      final projectsVM = context.read<ProjectsViewModel>();
-      projectsVM.clearProjects(); // Clear old data first
-      await projectsVM.fetchProjectsWithProgress(orgId);
-      
-      // Refresh Financial ViewModel  
-      final financialVM = context.read<FinancialViewModel>();
-      financialVM.clearTransactions(); // Clear old data first
-      await financialVM.fetchTransactions(orgId);
-    } catch (e) {
-      print('Error refreshing view models: $e');
-    }
   }
 
   Future<void> _checkAdminStatus() async {

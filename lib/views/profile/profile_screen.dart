@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodels/profile_viewmodel.dart';
 import '../auth/login_screen.dart';
-import '../dashboard/main_navigation_wrapper.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String organizationId;
@@ -464,7 +463,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               ...viewModel.organizations.map((org) {
                 final isCurrentOrg =
-                    org.id == viewModel.currentOrganizationId;
+                    org['id'] == viewModel.currentOrganizationId;
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: ElevatedButton.icon(
@@ -483,25 +482,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onPressed: isCurrentOrg
                         ? null
                         : () async {
-                            Navigator.pop(context); // Close the dialog
+                            Navigator.pop(context);
                             final success = await viewModel
-                                .switchOrganization(org.id);
+                                .switchOrganization(org['id'] as String);
                             if (success && mounted) {
-                              // Replace MainNavigationWrapper with new organization
-                              Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => MainNavigationWrapper(
-                                    organization: org.toMap(),
-                                    initialIndex: 3, // Stay on Profile tab
-                                  ),
-                                ),
+                              Navigator.of(context).pushNamedAndRemoveUntil(
+                                '/dashboard',
+                                (route) => false,
+                                arguments: org,
                               );
                             }
                           },
                     icon: isCurrentOrg ? const Icon(Icons.check) : null,
                     label: Text(
-                      org.name,
+                      org['name'] as String? ?? 'Unknown Organization',
                       style: GoogleFonts.poppins(
                         fontWeight: FontWeight.w600,
                       ),

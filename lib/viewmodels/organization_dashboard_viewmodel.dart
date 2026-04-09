@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../core/services/dashboard_service.dart';
-import '../models/financial_transaction.dart';
 import 'financial_viewmodel.dart';
 
 class OrganizationDashboardViewModel extends ChangeNotifier {
@@ -30,7 +29,7 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
 
   void calculateFinancialSummary(
     Map<String, dynamic> organization,
-    List<FinancialTransaction> transactions,
+    List<Map<String, dynamic>> transactions,
   ) {
     try {
       _errorMessage = null;
@@ -41,9 +40,9 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
 
       // Calculate income and expenses (exclude budget allocations which are internal transfers)
       for (final transaction in transactions) {
-        final title = transaction.title.toLowerCase();
-        final isInternalTransfer = title.contains('budget allocation') ||
-            title.contains('budget adjustment');
+        final title = (transaction['title'] ?? '').toString();
+        final isInternalTransfer = title.contains('Budget Allocation') ||
+            title.contains('Budget Adjustment');
 
         if (!isInternalTransfer) {
           final signedAmount = getSignedAmount(transaction);
@@ -121,25 +120,20 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
   }
 
   /// amount for a transaction (positive for income, negative for expense)
-  double getSignedAmount(FinancialTransaction transaction) {
-    final amount = transaction.amount;
-    final title = transaction.title.toLowerCase();
+  double getSignedAmount(Map<String, dynamic> transaction) {
+    final amount = _toDouble(transaction['amount']).abs();
+    final type =
+        (transaction['transaction_type'] ?? 'expense').toString().toLowerCase();
 
-    // Treat budget allocations as positive (they're internal transfers, not expenses)
-    if (title.contains('budget allocation') || title.contains('budget adjustment')) {
-      return amount;
-    }
-
-    return transaction.isIncome ? amount : -amount;
+    return type == 'income' ? amount : -amount;
   }
 
   double _toDouble(dynamic value) {
-    if (value == null) return 0.0;
     if (value is num) {
       return value.toDouble();
     }
 
-    return double.tryParse(value?.toString() ?? '') ?? 0.0;
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   Future<void> refresh(Map<String, dynamic> organization) async {

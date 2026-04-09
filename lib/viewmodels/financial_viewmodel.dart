@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import '../core/services/financial_service.dart';
-import '../models/financial_transaction.dart';
 
 class FinancialViewModel extends ChangeNotifier {
   final FinancialService _financialService = FinancialService();
 
-  List<FinancialTransaction> _transactions = [];
+  List<Map<String, dynamic>> _transactions = [];
   bool _isLoading = false;
   String? _errorMessage;
   String? _currentOrganizationId;
@@ -13,7 +12,7 @@ class FinancialViewModel extends ChangeNotifier {
   final List<String> _filters = ['All', 'Income', 'Expenses'];
   int _selectedFilterIndex = 0;
 
-  List<FinancialTransaction> get transactions => _transactions;
+  List<Map<String, dynamic>> get transactions => _transactions;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get currentOrganizationId => _currentOrganizationId;
@@ -21,25 +20,39 @@ class FinancialViewModel extends ChangeNotifier {
   int get selectedFilterIndex => _selectedFilterIndex;
 
   /// Get transactions based on current filter
-  List<FinancialTransaction> get filteredTransactions {
+  List<Map<String, dynamic>> get filteredTransactions {
     if (_selectedFilterIndex == 1) {
-      return _transactions.where((transaction) => transaction.isIncome).toList();
+      return _transactions.where((transaction) {
+        return (transaction['transaction_type'] ?? '')
+                .toString()
+                .toLowerCase() ==
+            'income';
+      }).toList();
     }
 
     if (_selectedFilterIndex == 2) {
-      return _transactions.where((transaction) => transaction.isExpense).toList();
+      return _transactions.where((transaction) {
+        return (transaction['transaction_type'] ?? '')
+                .toString()
+                .toLowerCase() ==
+            'expense';
+      }).toList();
     }
 
     return _transactions;
   }
 
   /// grouped transactions by date
-  List<(String, List<FinancialTransaction>)> get groupedTransactions {
+  List<(String, List<Map<String, dynamic>>)> get groupedTransactions {
     final filtered = filteredTransactions;
-    final Map<String, List<FinancialTransaction>> groups = {};
+    final Map<String, List<Map<String, dynamic>>> groups = {};
 
     for (final transaction in filtered) {
-      final key = _dateHeaderLabel(transaction.occurredAt);
+      final occurredAt = DateTime.tryParse(
+            transaction['occurred_at']?.toString() ?? '',
+          ) ??
+          DateTime.now();
+      final key = _dateHeaderLabel(occurredAt);
       groups.putIfAbsent(key, () => []).add(transaction);
     }
 
@@ -106,40 +119,14 @@ class FinancialViewModel extends ChangeNotifier {
 
       if (success) {
         // Remove transactions from local list
-        _transactions.removeWhere((transaction) => transaction.taskId == taskId);
+        _transactions.removeWhere(
+            (transaction) => transaction['task_id']?.toString() == taskId);
         notifyListeners();
       }
 
       return success;
     } catch (e) {
       _errorMessage = 'Failed to delete task transactions: ${e.toString()}';
-      notifyListeners();
-      return false;
-    }
-  }
-
-  /// Updates an existing transaction
-  Future<bool> updateTransaction(
-    String transactionId,
-    Map<String, dynamic> updates,
-  ) async {
-    _errorMessage = null;
-
-    try {
-      final updated = await _financialService.updateTransaction(transactionId, updates);
-
-      if (updated != null) {
-        // Update in local list
-        final index = _transactions.indexWhere((t) => t.id == transactionId);
-        if (index != -1) {
-          _transactions[index] = updated;
-        }
-        notifyListeners();
-        return true;
-      }
-      return false;
-    } catch (e) {
-      _errorMessage = 'Failed to update transaction: ${e.toString()}';
       notifyListeners();
       return false;
     }
@@ -167,31 +154,40 @@ class FinancialViewModel extends ChangeNotifier {
     double totalExpenses = 0;
 
     for (final transaction in _transactions) {
-      final title = transaction.title.toLowerCase();
+      final title = (transaction['title'] ?? '').toString().toLowerCase();
       final isInternalTransfer = title.contains('budget allocation') ||
           title.contains('budget adjustment');
 
       if (!isInternalTransfer) {
-        if (transaction.isIncome) {
-          totalIncome += transaction.amount;
+        final amount = _toDouble(transaction['amount']).abs();
+        final type = (transaction['transaction_type'] ?? 'expense')
+            .toString()
+            .toLowerCase();
+
+        if (type == 'income') {
+          totalIncome += amount;
         } else {
-          totalExpenses += transaction.amount;
+          totalExpenses += amount;
         }
       }
     }
 
-    return openingBudget + totalIncome - totalExpenses;
+    return (openingBudget as num).toDouble() + totalIncome - totalExpenses;
   }
 
-  double getSignedAmount(FinancialTransaction transaction) {
-    final title = transaction.title.toLowerCase();
+  double getSignedAmount(Map<String, dynamic> transaction) {
+    final amount = _toDouble(transaction['amount']).abs();
+    final type =
+        (transaction['transaction_type'] ?? 'expense').toString().toLowerCase();
+    final title = (transaction['title'] ?? '').toString().toLowerCase();
 
     // Treat budget allocations as positive (they're internal transfers, not expenses)
-    if (title.contains('budget allocation') || title.contains('budget adjustment')) {
-      return transaction.amount;
+    if (title.contains('budget allocation') ||
+        title.contains('budget adjustment')) {
+      return amount;
     }
 
-    return transaction.isIncome ? transaction.amount : -transaction.amount;
+    return type == 'income' ? amount : -amount;
   }
 
   void _setLoading(bool value) {
@@ -208,6 +204,14 @@ class FinancialViewModel extends ChangeNotifier {
     if (_currentOrganizationId != null) {
       await fetchTransactions(_currentOrganizationId!);
     }
+  }
+
+  double _toDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   String _dateHeaderLabel(DateTime date) {
@@ -242,14 +246,5 @@ class FinancialViewModel extends ChangeNotifier {
       'December',
     ];
     return months[month - 1];
-  }
-
-  /// Clears all transaction data (used when switching organizations)
-  void clearTransactions() {
-    _transactions.clear();
-    _currentOrganizationId = null;
-    _errorMessage = null;
-    _selectedFilterIndex = 0;
-    notifyListeners();
   }
 }

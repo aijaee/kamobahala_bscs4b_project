@@ -8,7 +8,6 @@ import '../../core/services/organization_service.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/dashboard_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../models/project.dart';
 import 'tasks_by_category_screen.dart';
 import 'search_results_screen.dart';
 import '../projects/project_overview.dart';
@@ -186,8 +185,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
         builder: (_) => SearchResultsScreen(
           query: query,
           tasks: allTasks,
-          projects: allProjects.map((p) => p.toMap()).toList(),
-          transactions: allTransactions.map((t) => t.toMap()).toList(),
+          projects: allProjects,
+          transactions: allTransactions,
         ),
       ),
     ).then((result) {
@@ -233,20 +232,21 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     }
 
     final matchingProjects = allProjects
-        .where((project) => project.name
+        .where((project) => (project['name'] ?? '')
+            .toString()
             .toLowerCase()
             .contains(queryLower))
         .take(3)
         .toList();
 
     for (var project in matchingProjects) {
-      final projectId = project.id;
+      final projectId = project['id'];
       final taskCount =
           allTasks.where((task) => task['project_id'] == projectId).length;
 
       suggestions.add({
         'type': 'project',
-        'title': project.name,
+        'title': project['name'] ?? 'Untitled Project',
         'subtitle': '$taskCount task${taskCount != 1 ? 's' : ''}',
         'icon': Icons.folder_outlined,
         'data': project,
@@ -255,7 +255,12 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
 
     final matchingTransactions = allTransactions
         .where((transaction) =>
-            transaction.title
+            (transaction['title'] ?? '')
+                .toString()
+                .toLowerCase()
+                .contains(queryLower) ||
+            (transaction['category'] ?? '')
+                .toString()
                 .toLowerCase()
                 .contains(queryLower))
         .take(2)
@@ -264,9 +269,9 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     for (var transaction in matchingTransactions) {
       suggestions.add({
         'type': 'transaction',
-        'title': transaction.title,
+        'title': transaction['title'] ?? 'Transaction',
         'subtitle':
-            '₱${transaction.amount.toStringAsFixed(2)}',
+            '₱${(transaction['amount'] ?? 0.0).toStringAsFixed(2)}',
         'icon': Icons.account_balance_wallet_outlined,
         'data': transaction,
       });
@@ -303,7 +308,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
           builder: (_) => ProjectOverviewScreen(
             project: data,
             organization: widget.organization,
-            onTabChange: widget.onTabChange,
           ),
         ),
       );
@@ -1374,15 +1378,16 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
             itemCount: projectsViewModel.projects.length,
             itemBuilder: (context, index) {
               final project = projectsViewModel.projects[index];
-              final progress = 0.0; // Progress calculated from tasks
+              final progress =
+                  (project['progress'] as num?)?.toDouble() ?? 0.0;
 
               return Padding(
                 padding: EdgeInsets.only(
                   left: index == 0 ? 0 : 16,
                 ),
                 child: _buildProjectCard(
-                  project.name,
-                  project.description ?? 'No description',
+                  project['name'] ?? 'Untitled',
+                  project['description'] ?? 'No description',
                   progress,
                   'In Progress',
                   const Color(0xFF137FEC),
@@ -1402,7 +1407,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     double progress,
     String days,
     Color color, {
-    Project? project,
+    Map<String, dynamic>? project,
   }) {
     return GestureDetector(
       onTap: () {
@@ -1412,7 +1417,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
             builder: (context) => ProjectOverviewScreen(
               organization: widget.organization,
               project: project,
-              onTabChange: widget.onTabChange,
             ),
           ),
         );

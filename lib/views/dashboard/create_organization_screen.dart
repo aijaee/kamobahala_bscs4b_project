@@ -417,7 +417,7 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
         final email = member['controller'].text.trim();
         final role = member['role'] as String;
         if (email.isNotEmpty) {
-          await _adminService.addMemberByEmail(newOrg.id, email, role);
+          await _adminService.addMemberByEmail(newOrg['id'], email, role);
         }
       }
 

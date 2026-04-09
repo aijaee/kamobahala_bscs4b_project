@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/auth_service.dart';
 import '../../core/services/organization_service.dart';
-import '../../models/organization.dart';
 import 'main_navigation_wrapper.dart';
 import '../auth/login_screen.dart';
 import 'create_organization_screen.dart';
@@ -25,7 +24,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   final AdminService _adminService = AdminService();
 
   String _fullName = "User";
-  List<Organization> _organizations = [];
+  List<Map<String, dynamic>> _organizations = [];
   Map<String, String> _userRoles = {};
   bool _isLoading = true;
   @override
@@ -48,9 +47,9 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     var orgs = await _orgService.getOrganizations();
     Map<String, String> roles = {};
     for (var org in orgs) {
-      final role = await _adminService.getUserRoleInOrganization(org.id);
+      final role = await _adminService.getUserRoleInOrganization(org['id']);
       if (role != null) {
-        roles[org.id] = role;
+        roles[org['id']] = role;
       }
     }
 
@@ -64,14 +63,14 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   }
 
   Future<void> _leaveOrganization(
-      Organization org, BuildContext context) async {
+      Map<String, dynamic> org, BuildContext context) async {
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Leave Organization?'),
         content: Text(
-            'Are you sure you want to leave "${org.name}"? You won\'t be able to access it anymore.'),
+            'Are you sure you want to leave "${org['name']}"? You won\'t be able to access it anymore.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -92,7 +91,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     if (currentUserEmail == null) return;
 
     // Remove user from organization
-    final success = await _adminService.removeMember(org.id, currentUserEmail);
+    final success = await _adminService.removeMember(org['id'], currentUserEmail);
 
     if (!context.mounted) return;
 
@@ -110,14 +109,14 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   }
 
   Future<void> _deleteOrganization(
-      Organization org, BuildContext context) async {
+      Map<String, dynamic> org, BuildContext context) async {
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Organization?'),
         content: Text(
-            'Are you sure you want to permanently delete "${org.name}"? This action cannot be undone.'),
+            'Are you sure you want to permanently delete "${org['name']}"? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -135,7 +134,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
 
     // Delete the organization
     try {
-      await _orgService.deleteOrganization(org.id);
+      await _orgService.deleteOrganization(org['id']);
 
       if (!context.mounted) return;
 
@@ -249,7 +248,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
     );
   }
 
-  Widget _buildOrganizationList(List<Organization> orgs) {
+  Widget _buildOrganizationList(List<Map<String, dynamic>> orgs) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -265,7 +264,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           separatorBuilder: (context, index) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final org = orgs[index];
-            final userRole = _userRoles[org.id] ?? 'Member';
+            final userRole = _userRoles[org['id']] ?? 'Member';
             return _buildOrganizationCard(org, userRole, context);
           },
         ),
@@ -274,7 +273,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
   }
 
   Widget _buildOrganizationCard(
-      Organization org, String userRole, BuildContext context) {
+      Map<String, dynamic> org, String userRole, BuildContext context) {
     return Material(
       elevation: 2,
       borderRadius: BorderRadius.circular(12),
@@ -283,10 +282,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => MainNavigationWrapper(
-                organization: org.toMap(),
-                initialIndex: 0,
-              ),
+              builder: (_) => MainNavigationWrapper(organization: org, initialIndex: 0),
             ),
           );
         },
@@ -310,8 +306,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 255, 255, 255)
-                      .withValues(alpha: 0.1),
+                  color:
+                      const Color.fromARGB(255, 255, 255, 255).withOpacity(.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -325,7 +321,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      org.name,
+                      org['name'] ?? 'Unnamed',
                       style: GoogleFonts.inter(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -355,21 +351,26 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                 onSelected: (value) {
                   if (value == 'leave') {
                     _leaveOrganization(org, context);
-                  } else if (value == 'delete') {
+                  }
+
+                  if (value == 'delete') {
                     _deleteOrganization(org, context);
-                  } else if (value == 'edit') {
+                  }
+
+                  if (value == 'edit') {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) =>
-                            EditOrganizationScreen(organization: org.toMap()),
+                            EditOrganizationScreen(organization: org),
                       ),
                     );
                   }
                 },
                 itemBuilder: (context) {
-                  final items = <PopupMenuEntry<String>>[];
+                  List<PopupMenuEntry<String>> items = [];
 
+                  // Show edit and delete options only for admins
                   if (userRole.toLowerCase() == 'admin') {
                     items.add(
                       const PopupMenuItem(
@@ -379,38 +380,42 @@ class _MainDashboardScreenState extends State<MainDashboardScreen> {
                           children: [
                             Icon(Icons.edit, size: 18),
                             SizedBox(width: 10),
-                            Expanded(child: Text('Edit Organization')),
+                            Expanded(
+                              child: Text("Edit Organization"),
+                            ),
                           ],
                         ),
                       ),
                     );
                     items.add(
-                      const PopupMenuItem(
+                    const PopupMenuItem(
                         value: 'delete',
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.delete, size: 18),
+                            Icon(Icons.logout, size: 18),
                             SizedBox(width: 10),
-                            Expanded(child: Text('Delete Organization')),
+                            Expanded(
+                              child: Text("Delete Organization"),
+                            ),
                           ],
-                        ),
-                      ),
-                    );
+                        )),
+                  );
                   }
 
                   items.add(
                     const PopupMenuItem(
-                      value: 'leave',
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.logout, size: 18),
-                          SizedBox(width: 10),
-                          Expanded(child: Text('Leave Organization')),
-                        ],
-                      ),
-                    ),
+                        value: 'leave',
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.logout, size: 18),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text("Leave Organization"),
+                            ),
+                          ],
+                        )),
                   );
 
                   return items;

@@ -5,13 +5,11 @@ import 'package:kamobahala_bscs4b_project/viewmodels/tasks_viewmodel.dart';
 import 'package:kamobahala_bscs4b_project/viewmodels/financial_viewmodel.dart';
 import 'package:kamobahala_bscs4b_project/core/services/admin_service.dart';
 import 'package:kamobahala_bscs4b_project/core/services/financial_service.dart';
-import 'package:kamobahala_bscs4b_project/models/task.dart';
 import 'task_details.dart';
 import 'new_task_screen.dart';
 import 'edit_task_screen.dart';
 import '../dashboard/organization_dashboard.dart';
 import '../dashboard/financial_ledger.dart';
-import '../profile/profile_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   final String projectId;
@@ -57,25 +55,55 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 
   Future<void> _handleTaskStatusChange(
-      BuildContext context, Task task, bool isMarkedComplete) async {
-    final taskId = task.id;
+      BuildContext context, Map<String, dynamic> task, bool isMarkedComplete) async {
+    final taskId = task['task_id'] ?? task['id'];
     final newStatus = isMarkedComplete ? 'completed' : 'todo';
 
     // Update task status
     Provider.of<TasksViewModel>(context, listen: false)
         .updateTask(taskId, {'status': newStatus});
 
-    // If marking as completed, refresh the task list for progress calculation
+    // If marking as completed, record the expense to financial depository
     if (isMarkedComplete) {
-      // TODO: [REFACTORING] Financial tracking for tasks needs to be re-implemented
-      // The Task model no longer stores estimated_expense, deduct_from_budget, expense_category
-      // These should be stored in a separate financial tracking system or FinancialTransaction model
-      
-      if (mounted) {
-        Provider.of<TasksViewModel>(context, listen: false)
-            .fetchProjectTasks(widget.projectId);
-        Provider.of<FinancialViewModel>(context, listen: false)
-            .fetchTransactions(widget.organizationId);
+      final estimatedExpense = (task['estimated_expense'] ?? 0.0) as num;
+      final deductFromBudget = task['deduct_from_budget'] ?? false;
+
+      if (estimatedExpense > 0 && deductFromBudget) {
+        try {
+          await _financialService.createTransaction(
+            widget.organizationId,
+            {
+              'title': 'Task: ${task['title']}',
+              'transaction_type': 'expense',
+              'amount': estimatedExpense.toDouble(),
+              'category': task['expense_category'] ?? 'Task Expense',
+              'department': 'Projects',
+              'description': 'Task completed: ${task['title']}',
+              'project_id': widget.projectId,
+              'task_id': taskId,
+              'occurred_at': DateTime.now().toIso8601String(),
+            },
+          );
+          // Refresh both task list and financial data after transaction
+          if (mounted) {
+            Provider.of<TasksViewModel>(context, listen: false)
+                .fetchProjectTasks(widget.projectId);
+            Provider.of<FinancialViewModel>(context, listen: false)
+                .fetchTransactions(widget.organizationId);
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Note: Task completed, but could not record financial detail: $e')),
+            );
+          }
+        }
+      } else if (isMarkedComplete) {
+        // Even if not deducting from budget, refresh the task list for progress calculation
+        if (mounted) {
+          Provider.of<TasksViewModel>(context, listen: false)
+              .fetchProjectTasks(widget.projectId);
+        }
       }
     } else {
       // If unchecking (marking as not completed), delete associated financial transactions
@@ -99,8 +127,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 
   /// Handle task deletion with confirmation dialog
-  Future<void> _handleDeleteTask(BuildContext context, Task task) async {
-    final taskTitle = task.title;
+  Future<void> _handleDeleteTask(BuildContext context, Map<String, dynamic> task) async {
+    final taskTitle = task['title'] ?? 'Untitled Task';
     
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
@@ -127,7 +155,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
     if (confirmed != true) return;
 
     try {
-      final taskId = task.id;
+      final taskId = task['task_id'] ?? task['id'];
+      
+      if (taskId == null || taskId.isEmpty) {
+        throw Exception('Invalid task ID');
+      }
       
       // Delete the task
       final success = await Provider.of<TasksViewModel>(context, listen: false).deleteTask(taskId);
@@ -207,7 +239,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   Widget _buildTaskList(TasksViewModel tasksViewModel) {
     final tasks = tasksViewModel.tasks;
-    final completedTasks = tasks.where((task) => task.status == 'completed').length;
+    final completedTasks = tasks.where((task) => task['status'] == 'completed').length;
     final progress = tasks.isNotEmpty ? completedTasks / tasks.length : 0.0;
 
     return SingleChildScrollView(
@@ -267,9 +299,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  Widget _buildTaskCard(BuildContext context, Task task) {
-    final priority = task.priority?.toString() ?? 'Low';
-    final isCompleted = task.status == 'completed';
+  Widget _buildTaskCard(BuildContext context, Map<String, dynamic> task) {
+    final priority = task['priority']?.toString() ?? 'Low';
+    final isCompleted = task['status'] == 'completed';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -289,7 +321,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           },
         ),
         title: Text(
-          task.title,
+          task['title'] ?? 'Untitled Task',
           style: GoogleFonts.inter(
             fontWeight: FontWeight.w600,
             fontSize: 14,
@@ -297,7 +329,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
         ),
         subtitle: Text(
-          task.description ?? 'No description',
+          task['description'] ?? 'No description',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF9CA3AF)),
@@ -316,10 +348,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
                           context,
                           MaterialPageRoute(
                             builder: (_) => EditTaskScreen(
-                              taskId: task.id,
+                              taskId: task['id'],
                               projectId: widget.projectId,
                               organizationId: widget.organizationId,
-                              task: task.toMap(),
+                              task: task,
                             ),
                           ),
                         ).then((result) {
@@ -462,16 +494,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
                     'id': widget.organizationId,
                     'name': 'Organization',
                   },
-                ),
-              ),
-            );
-          } else if (index == 3) {
-            // Navigate to ProfileScreen
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ProfileScreen(
-                  organizationId: widget.organizationId,
                 ),
               ),
             );

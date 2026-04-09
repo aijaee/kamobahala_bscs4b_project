@@ -1,12 +1,10 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../models/organization.dart';
-import '../../models/organization_member.dart';
 
 class OrganizationService {
   final SupabaseClient _client = Supabase.instance.client;
 
   // TODO: [MVVM] this should be called via OrganizationViewModel for UI data binding
-  Future<List<Organization>> getOrganizations() async {
+  Future<List<Map<String, dynamic>>> getOrganizations() async {
     try {
       final user = _client.auth.currentUser;
       if (user == null) return [];
@@ -25,21 +23,17 @@ class OrganizationService {
           .select()
           .inFilter('id', orgIds.toList());
 
-      return (organizations as List)
-          .map((o) => Organization.fromMap(o as Map<String, dynamic>))
-          .toList();
+      return List<Map<String, dynamic>>.from(organizations);
     } catch (e) {
       print('Error fetching organizations: $e');
       return [];
     }
   }
 
-  Future<Organization> createOrganization(
+  Future<Map<String, dynamic>> createOrganization(
       Map<String, dynamic> data) async {
     try {
       final newOrg = await _client.from('organizations').insert(data).select().single();
-      final organization = Organization.fromMap(newOrg);
-      
       final user = _client.auth.currentUser;
       if (user != null && newOrg['id'] != null) {
         String? creatorFullName;
@@ -63,38 +57,45 @@ class OrganizationService {
         });
       }
       
-      return organization;
+      return newOrg;
     } catch (e) {
       print('Error creating organization: $e');
       rethrow;
     }
   }
 
-  Future<Organization> updateOrganization(
+  Future<Map<String, dynamic>> updateOrganization(
       String id, Map<String, dynamic> data) async {
-    final response = await _client
+    return await _client
         .from('organizations')
         .update(data)
         .eq('id', id)
         .select()
         .single();
-    return Organization.fromMap(response);
   }
 
   Future<void> deleteOrganization(String id) async {
     await _client.from('organizations').delete().eq('id', id);
   }
 
-  Future<List<OrganizationMember>> getOrganizationMembers(String organizationId) async {
+  Future<List<Map<String, dynamic>>> getOrganizationMembers(String organizationId) async {
     try {
       final response = await _client
           .from('organization_members')
           .select()
           .eq('organization_id', organizationId);
       
-      return (response as List)
-          .map((m) => OrganizationMember.fromMap(m as Map<String, dynamic>))
-          .toList();
+      // Normalize 'name' to 'full_name' for consistent UI display
+      List<Map<String, dynamic>> members = [];
+      for (var member in response) {
+        final memberMap = Map<String, dynamic>.from(member);
+        if (memberMap['name'] != null && memberMap['full_name'] == null) {
+          memberMap['full_name'] = memberMap['name'];
+        }
+        members.add(memberMap);
+      }
+      
+      return members;
     } catch (e) {
       print('Error fetching organization members: $e');
       return [];
@@ -110,11 +111,13 @@ class OrganizationService {
       
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('Error fetching task categories: $e');
-      // Don't fall back to hardcoded list - return empty list or throw
-      // This way users will see an error and know something went wrong
-      // rather than losing their custom categories
-      return [];
+      return [
+        {'id': '1', 'name': 'Development'},
+        {'id': '2', 'name': 'Design'},
+        {'id': '3', 'name': 'Marketing'},
+        {'id': '4', 'name': 'Documentation'},
+        {'id': '5', 'name': 'Testing'},
+      ];
     }
   }
 

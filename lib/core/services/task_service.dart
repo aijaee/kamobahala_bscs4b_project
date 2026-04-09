@@ -1,35 +1,32 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../models/task.dart';
-import 'financial_service.dart';
 
 class TaskService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  Future<List<Task>> fetchProjectTasks(String projectId) async {
+  Future<List<Map<String, dynamic>>> fetchProjectTasks(String projectId) async {
     final response = await _client
         .from('tasks')
         .select()
         .eq('project_id', projectId)
         .order('due_date', ascending: true);
 
-    return (response as List)
-        .map((t) => Task.fromMap(t as Map<String, dynamic>))
-        .toList();
+    return List<Map<String, dynamic>>.from(response);
   }
 
-  Future<Map<String, List<Task>>> fetchTasksByCategory(String projectId) async {
+  Future<Map<String, List<Map<String, dynamic>>>> fetchTasksByCategory(
+      String projectId) async {
     final tasks = await fetchProjectTasks(projectId);
-    final Map<String, List<Task>> grouped = {};
+    final Map<String, List<Map<String, dynamic>>> grouped = {};
 
     for (final task in tasks) {
-      final category = task.category ?? 'Uncategorized';
+      final category = task['category'] ?? 'Uncategorized';
       grouped.putIfAbsent(category, () => []).add(task);
     }
 
     return grouped;
   }
 
-  Future<Task> createTask(
+  Future<Map<String, dynamic>> createTask(
       String projectId, Map<String, dynamic> taskData) async {
     final data = {
       ...taskData,
@@ -39,41 +36,10 @@ class TaskService {
     final response =
         await _client.from('tasks').insert(data).select().single();
 
-    final task = Task.fromMap(response);
-
-    // Create financial transaction if deduct_from_budget is true and estimated_expense > 0
-    final deductFromBudget = taskData['deduct_from_budget'] as bool? ?? false;
-    final estimatedExpense = (taskData['estimated_expense'] as num?)?.toDouble() ?? 0.0;
-    final organizationId = taskData['organization_id'] as String?;
-    final taskTitle = taskData['title'] as String? ?? 'Task';
-
-    if (deductFromBudget && estimatedExpense > 0 && organizationId != null) {
-      try {
-        final financialService = FinancialService();
-        await financialService.createTransaction(
-          organizationId,
-          {
-            'title': 'Task: $taskTitle',
-            'description': 'Expense for task: $taskTitle',
-            'department': 'Tasks',
-            'transaction_type': 'expense',
-            'amount': estimatedExpense,
-            'occurred_at': DateTime.now().toIso8601String(),
-            'task_id': task.id,
-            'project_id': projectId,
-          },
-        );
-      } catch (e) {
-        print('Error creating financial transaction for task: $e');
-        // Don't fail the task creation if transaction fails
-        // Just log the error
-      }
-    }
-
-    return task;
+    return response;
   }
 
-  Future<Task> updateTask(
+  Future<Map<String, dynamic>> updateTask(
       String taskId, Map<String, dynamic> updates) async {
     final response = await _client
         .from('tasks')
@@ -82,14 +48,7 @@ class TaskService {
         .select()
         .single();
 
-    final task = Task.fromMap(response);
-
-    // Handle financial transaction updates if needed
-    // If estimated_expense or deduct_from_budget changed, we might need to update transactions
-    // For now, just return the updated task
-    // TODO: Implement transaction updates if financial details changed
-
-    return task;
+    return response;
   }
 
   Future<bool> deleteTask(String taskId) async {
