@@ -3,17 +3,19 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'edit_task_screen.dart';
 import '../../viewmodels/tasks_viewmodel.dart';
+import '../../models/task.dart';
 import '../../models/organization_member.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/organization_service.dart';
-import '../../core/services/project_service.dart';
 
 class TaskDetailsScreen extends StatefulWidget {
   final dynamic task; // Can be Task or Map for legacy compatibility
+  final String? organizationId;
 
   const TaskDetailsScreen({
     super.key,
     required this.task,
+    this.organizationId,
   });
 
   @override
@@ -30,14 +32,17 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   @override
   void initState() {
     super.initState();
-    _currentStatus = widget.task['status'] == 'Todo'
+    final taskStatus = (widget.task is Map)
+        ? widget.task['status']
+        : (widget.task as Task).status;
+    _currentStatus = taskStatus == 'Todo' || taskStatus == 'todo'
         ? 'To Do'
-        : (widget.task['status'] ?? 'To Do');
+        : (taskStatus ?? 'To Do');
     _checkAdminStatus();
   }
 
   Future<void> _checkAdminStatus() async {
-    final organizationId = widget.task['organization_id'];
+    final organizationId = widget.organizationId;
     if (organizationId != null) {
       final isAdmin = await _adminService.isUserAdmin(organizationId);
       if (mounted) {
@@ -49,7 +54,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   Future<void> _refreshTask() async {
     // Refresh task data from the ViewModel
     try {
-      final projectId = widget.task['project_id'];
+      final projectId = (widget.task is Map)
+          ? widget.task['project_id']
+          : (widget.task as Task).projectId;
       if (projectId != null && mounted) {
         final tasksViewModel = context.read<TasksViewModel>();
         await tasksViewModel.fetchProjectTasks(projectId);
@@ -65,8 +72,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
   Future<void> _toggleTaskCompletion() async {
     try {
-      final taskId = widget.task.id;
-      
+      final taskId =
+          (widget.task is Map) ? widget.task['id'] : (widget.task as Task).id;
+
       if (taskId.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Unable to update task - missing ID')),
@@ -81,8 +89,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       final tasksViewModel = context.read<TasksViewModel>();
 
       // Update task status through ViewModel (this will notify listeners)
-      final updateSuccess = await tasksViewModel.updateTask(taskId, {'status': newStatus});
-      
+      final updateSuccess =
+          await tasksViewModel.updateTask(taskId, {'status': newStatus});
+
       if (!updateSuccess) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -90,58 +99,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
           );
         }
         return;
-      }
-
-    // If marking as completed, update the project budget
-      if (isMarkedComplete) {
-        final projectId = widget.task['project_id'];
-
-        if (projectId != null) {
-          try {
-            // Fetch current project to get its budget
-            final projectService = ProjectService();
-            final project = await projectService.fetchProject(projectId);
-            final currentBudget = project.budget ?? 0.0;
-            
-            print('Project budget fetched: $currentBudget');
-            
-            // TODO: [REFACTORING] Financial tracking for tasks needs to be re-implemented
-            // The Task model no longer stores estimated_expense and deduct_from_budget
-            // These should be stored in a separate financial tracking system
-          } catch (e) {
-            print('Error updating project budget: $e');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Note: Task completed, but could not record financial detail: $e')),
-              );
-            }
-          }
-        }
-      } else {
-        // If unchecking (marking as not completed), reverse the budget change
-        final projectId = widget.task['project_id'];
-
-        if (projectId != null) {
-          try {
-            // Fetch current project to get its budget
-            final projectService = ProjectService();
-            final project = await projectService.fetchProject(projectId);
-            final currentBudget = project.budget ?? 0.0;
-            
-            print('Reversing project budget: Current=$currentBudget');
-            
-            // TODO: [REFACTORING] Financial tracking for tasks needs to be re-implemented
-            // The Task model no longer stores estimated_expense and deduct_from_budget
-            // These should be stored in a separate financial tracking system
-          } catch (e) {
-            print('Error reversing project budget: $e');
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Note: Task status updated, but could not reverse budget: $e')),
-              );
-            }
-          }
-        }
       }
 
       if (mounted) {
@@ -193,6 +150,13 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   }
 
   Widget _buildHeroHeader() {
+    final priority = (widget.task is Map)
+        ? widget.task['priority']?.toString() ?? 'Low'
+        : (widget.task as Task).priority?.toString() ?? 'Low';
+    final title = (widget.task is Map)
+        ? widget.task['title'] ?? 'Task Title'
+        : (widget.task as Task).title;
+
     return Container(
       width: double.infinity,
       height: 180,
@@ -201,8 +165,8 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            _getPriorityColor(widget.task['priority']?.toString() ?? 'Low').withValues(alpha: 0.8),
-            _getPriorityColor(widget.task['priority']?.toString() ?? 'Low').withValues(alpha: 0.4),
+            _getPriorityColor(priority).withValues(alpha: 0.8),
+            _getPriorityColor(priority).withValues(alpha: 0.4),
           ],
         ),
       ),
@@ -212,7 +176,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            widget.task['title'] ?? 'Task Title',
+            title ?? 'Task Title',
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 28,
@@ -225,6 +189,17 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   }
 
   Widget _buildInfoGrid() {
+    final priority = (widget.task is Map)
+        ? widget.task['priority']?.toString().toUpperCase() ?? 'LOW'
+        : (widget.task as Task).priority?.toString().toUpperCase() ?? 'LOW';
+    final priorityColor = _getPriorityColor((widget.task is Map)
+        ? widget.task['priority']?.toString() ?? 'Low'
+        : (widget.task as Task).priority?.toString() ?? 'Low');
+    final dueDate = (widget.task is Map)
+        ? widget.task['due_date']
+        : (widget.task as Task).dueDate;
+    final dueDateStr = dueDate != null ? _formatDate(dueDate) : 'No date';
+
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -234,8 +209,8 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
               _buildGridItem(
                 Icons.flag_rounded,
                 "Priority",
-                widget.task['priority']?.toString().toUpperCase() ?? 'LOW',
-                _getPriorityColor(widget.task['priority']?.toString() ?? 'Low'),
+                priority,
+                priorityColor,
               ),
               const SizedBox(width: 16),
               _buildGridItem(
@@ -252,16 +227,14 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
               _buildGridItem(
                 Icons.calendar_today,
                 "Due Date",
-                widget.task['due_date'] != null
-                    ? _formatDate(widget.task['due_date'])
-                    : 'No date',
+                dueDateStr,
                 const Color(0xFF617589),
               ),
               const SizedBox(width: 16),
               FutureBuilder<String>(
                 future: _getAssigneeDisplayName(),
                 builder: (context, snapshot) {
-                  final displayName = snapshot.data ?? widget.task['assignee'] ?? 'Unassigned';
+                  final displayName = snapshot.data ?? 'Unassigned';
                   return _buildGridItem(
                     Icons.person,
                     "Assigned To",
@@ -277,43 +250,73 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     );
   }
 
-  String _formatDate(String dateString) {
+  String _formatDate(dynamic dateValue) {
     try {
-      final date = DateTime.parse(dateString);
-      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      DateTime date;
+      if (dateValue is String) {
+        date = DateTime.parse(dateValue);
+      } else if (dateValue is DateTime) {
+        date = dateValue;
+      } else {
+        return 'Invalid date';
+      }
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
       return '${months[date.month - 1]} ${date.day}, ${date.year}';
     } catch (e) {
-      return dateString;
+      return dateValue.toString();
     }
   }
 
   Future<String> _getAssigneeDisplayName() async {
-    if (widget.task['assignee'] != null) {
-      final assigneeEmail = widget.task['assignee'].toString();
+    final assigneeId = (widget.task is Map)
+        ? widget.task['assignee_id'] ??
+            widget.task['assignee'] ??
+            widget.task['assignee_name']
+        : (widget.task as Task).assigneeId ??
+            (widget.task as Task).assigneeName;
+
+    if (assigneeId != null) {
       try {
-        final organizationId = widget.task['organization_id'];
-        if (organizationId == null) return assigneeEmail;
-        
-        final members = await _orgService.getOrganizationMembers(organizationId);
-        
-        // Find member by email from the typed list
+        final organizationId = widget.organizationId;
+        if (organizationId == null) return assigneeId.toString();
+
+        final members =
+            await _orgService.getOrganizationMembers(organizationId);
+
+        // Find member by ID from the typed list
         OrganizationMember? member;
         try {
           member = members.firstWhere(
-            (m) => m.email == assigneeEmail,
+            (m) =>
+                m.userId == assigneeId ||
+                m.email == assigneeId ||
+                m.fullName == assigneeId,
           );
         } catch (e) {
           // Member not found
-          return assigneeEmail;
+          return assigneeId.toString();
         }
-        
+
         if (member.fullName != null && member.fullName!.isNotEmpty) {
           return member.fullName!;
         }
       } catch (e) {
-        // Continue with email fallback
+        // Continue with ID fallback
       }
-      return assigneeEmail;
+      return assigneeId.toString();
     }
     return 'Unassigned';
   }
@@ -358,6 +361,10 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   }
 
   Widget _buildDescription() {
+    final description = (widget.task is Map)
+        ? widget.task['description'] ?? 'No description provided'
+        : ((widget.task as Task).description ?? 'No description provided');
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
       child: Column(
@@ -374,7 +381,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            widget.task['description'] ?? 'No description provided',
+            description,
             style: GoogleFonts.inter(
               fontSize: 14,
               color: const Color(0xFF111418),
@@ -387,15 +394,19 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   }
 
   Widget _buildFinancialDetailsCard() {
-    final estimatedAmount = widget.task['estimated_expense'] ?? 0.0;
-    final expenseCategory = widget.task['expense_category'] ?? 'Not specified';
-    final deductFromBudget = widget.task['deduct_from_budget'] ?? false;
-    
-    // Determine labels and colors based on budget mode
-    final amountLabel = deductFromBudget ? 'Estimated Expense' : 'Estimated Income';
-    final amountColor = deductFromBudget ? const Color(0xFFEF4444) : const Color(0xFF10B981);
-    final budgetModeLabel = deductFromBudget ? 'Deduct from Budget' : 'Add to Budget';
-    final budgetModeColor = deductFromBudget ? const Color(0xFFEF4444) : const Color(0xFF10B981);
+    final taskData = widget.task is Map
+        ? Map<String, dynamic>.from(widget.task as Map)
+        : (widget.task as Task).toMap();
+    final estimatedAmount = _toDouble(taskData['estimated_expense']) ?? 0.0;
+    final expenseCategory =
+        taskData['expense_category']?.toString() ?? 'Not specified';
+    final deductFromBudget = taskData['deduct_from_budget'] as bool? ?? false;
+    final amountLabel =
+        deductFromBudget ? 'Estimated Expense' : 'Estimated Income';
+    final amountColor =
+        deductFromBudget ? const Color(0xFFEF4444) : const Color(0xFF10B981);
+    final budgetModeColor =
+        deductFromBudget ? const Color(0xFFEF4444) : const Color(0xFF10B981);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -478,14 +489,15 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: budgetModeColor.withOpacity(0.15),
+                  color: budgetModeColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: budgetModeColor, width: 1),
                 ),
                 child: Text(
-                  budgetModeLabel,
+                  deductFromBudget ? 'Deduct from Budget' : 'Add to Budget',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -530,28 +542,38 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         if (_isAdmin)
           IconButton(
             icon: const Icon(Icons.edit, color: Colors.white, size: 20),
-            onPressed: () {
-              final projectId = widget.task['project_id'];
-              final organizationId = widget.task['organization_id'];
-              final taskId = widget.task['id'];
-              
-              if (projectId != null && organizationId != null && taskId != null) {
-                Navigator.push(
+            onPressed: () async {
+              final taskData = widget.task is Map
+                  ? Map<String, dynamic>.from(widget.task as Map)
+                  : (widget.task as Task).toMap();
+              final projectId = taskData['project_id']?.toString();
+              final organizationId = widget.organizationId ??
+                  taskData['organization_id']?.toString();
+              final taskId = taskData['id']?.toString() ?? '';
+
+              if (projectId != null &&
+                  organizationId != null &&
+                  taskId.isNotEmpty) {
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) => EditTaskScreen(
                       taskId: taskId,
                       projectId: projectId,
                       organizationId: organizationId,
-                      task: widget.task,
+                      task: taskData,
                     ),
                   ),
-                ).then((_) {
-                  Navigator.pop(context);
-                });
+                );
+                if (!mounted) return;
+                if (result == true) {
+                  Navigator.pop(context, true);
+                }
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Unable to edit task - missing information')),
+                  const SnackBar(
+                      content:
+                          Text('Unable to edit task - missing information')),
                 );
               }
             },
@@ -571,5 +593,13 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       default:
         return const Color(0xFF6B7280);
     }
+  }
+
+  double? _toDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
   }
 }

@@ -25,7 +25,8 @@ class ProjectsList extends StatefulWidget {
   State<ProjectsList> createState() => _ProjectsListState();
 }
 
-class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver {
+class _ProjectsListState extends State<ProjectsList>
+    with WidgetsBindingObserver {
   late int currentIndex;
   int selectedTab = 0;
   bool _isAdmin = false;
@@ -49,7 +50,9 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _fetchBalance();
-        context.read<ProjectsViewModel>().fetchProjectsWithProgress(widget.organization['id'].toString());
+        context
+            .read<ProjectsViewModel>()
+            .fetchProjectsWithProgress(widget.organization['id'].toString());
         context.read<ProjectsViewModel>().fetchCompletedProjects();
         _buildTabsFromProjects();
       }
@@ -67,7 +70,9 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
   Future<void> _refreshProjectsWithProgress() async {
     if (mounted) {
       await Future.wait([
-        context.read<ProjectsViewModel>().fetchProjectsWithProgress(widget.organization['id'].toString()),
+        context
+            .read<ProjectsViewModel>()
+            .fetchProjectsWithProgress(widget.organization['id'].toString()),
         context.read<ProjectsViewModel>().fetchCompletedProjects(),
       ]);
       _buildTabsFromProjects();
@@ -118,8 +123,7 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
     }
   }
 
-  List<Project> _getFilteredProjects(
-      List<Project> projects) {
+  List<Project> _getFilteredProjects(List<Project> projects) {
     return projects.where((project) {
       // Only include active/ongoing projects, exclude completed ones
       final status = (project.status ?? 'active').toLowerCase();
@@ -128,9 +132,7 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
       }
 
       final matchesSearch = _searchQuery.isEmpty ||
-          project.name
-              .toLowerCase()
-              .contains(_searchQuery.toLowerCase());
+          project.name.toLowerCase().contains(_searchQuery.toLowerCase());
 
       final matchesTab = selectedTab == 0;
 
@@ -141,10 +143,12 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
   @override
   Widget build(BuildContext context) {
     return Consumer<ProjectsViewModel>(
-        builder: (context, projectsViewModel, _) {
-          return Consumer<FinancialViewModel>(
-            builder: (context, financialViewModel, _) {
-              return SafeArea(
+      builder: (context, projectsViewModel, _) {
+        return Consumer<FinancialViewModel>(
+          builder: (context, financialViewModel, _) {
+            return Material(
+              color: Colors.white,
+              child: SafeArea(
                 child: Column(
                   children: [
                     _header(),
@@ -160,7 +164,9 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                             const SizedBox(height: 12),
                             if (projectsViewModel.isLoading)
                               const Center(child: CircularProgressIndicator())
-                            else if (_getFilteredProjects(projectsViewModel.projects).isEmpty)
+                            else if (_getFilteredProjects(
+                                    projectsViewModel.projects)
+                                .isEmpty)
                               const Center(
                                 child: Padding(
                                   padding: EdgeInsets.all(20.0),
@@ -168,27 +174,41 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                                 ),
                               )
                             else
-                              ..._getFilteredProjects(projectsViewModel.projects)
+                              ..._getFilteredProjects(
+                                      projectsViewModel.projects)
                                   .asMap()
                                   .entries
                                   .map((entry) {
                                 final project = entry.value;
-                                final isLast = entry.key == _getFilteredProjects(projectsViewModel.projects).length - 1;
-                                final progress = 0.0;
+                                final isLast = entry.key ==
+                                    _getFilteredProjects(
+                                                projectsViewModel.projects)
+                                            .length -
+                                        1;
+                                final progress = projectsViewModel
+                                    .getProjectProgressFromCache(project.id)
+                                    .clamp(0.0, 1.0);
 
                                 double spent = 0.0;
                                 final projectId = project.id;
-                                for (final transaction in financialViewModel.transactions) {
+                                for (final transaction
+                                    in financialViewModel.transactions) {
                                   if (transaction.projectId == projectId &&
-                                      transaction.transactionType.toLowerCase() == 'expense' &&
+                                      transaction.transactionType
+                                              .toLowerCase() ==
+                                          'expense' &&
                                       transaction.title.startsWith('Task:')) {
                                     spent += transaction.amount;
                                   }
                                 }
 
                                 final projectBudget = project.budget ?? 0.0;
-                                String budget = projectBudget > 0 ? "₱${projectBudget.toStringAsFixed(2)}" : "₱0.00";
-                                String spentStr = spent > 0 ? "₱${spent.toStringAsFixed(2)}" : "₱0.00";
+                                String budget = projectBudget > 0
+                                    ? "₱${projectBudget.toStringAsFixed(2)}"
+                                    : "₱0.00";
+                                String spentStr = spent > 0
+                                    ? "₱${spent.toStringAsFixed(2)}"
+                                    : "₱0.00";
 
                                 return Column(
                                   children: [
@@ -204,7 +224,8 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (_) => ProjectOverviewScreen(
+                                            builder: (_) =>
+                                                ProjectOverviewScreen(
                                               organization: widget.organization,
                                               project: project,
                                               onTabChange: widget.onTabChange,
@@ -227,15 +248,19 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                                     const Center(
                                       child: Padding(
                                         padding: EdgeInsets.all(20.0),
-                                        child: Text("No completed projects yet."),
+                                        child:
+                                            Text("No completed projects yet."),
                                       ),
                                     )
                                   ]
-                                : projectsViewModel.completedProjects.map((project) {
+                                : projectsViewModel.completedProjects
+                                    .map((project) {
                                     final budget = project.budget != null
                                         ? "₱${project.budget}"
                                         : "₱0";
-                                    final completedDate = project.endDate?.toString() ?? "Recently completed";
+                                    final completedDate =
+                                        project.endDate?.toString() ??
+                                            "Recently completed";
                                     return _completedCard(
                                       title: project.name,
                                       amount: budget,
@@ -248,11 +273,12 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                     ),
                   ],
                 ),
-              );
-            },
-          );
-        },
-      );
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   /// HEADER
@@ -391,7 +417,8 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                 ),
                 if (_isAdmin && projectId != null)
                   IconButton(
-                    icon: const Icon(Icons.edit, color: Color(0xFF137FEC), size: 20),
+                    icon: const Icon(Icons.edit,
+                        color: Color(0xFF137FEC), size: 20),
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -402,8 +429,8 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
                           ),
                         ),
                       ).then((_) {
-                        context.read<ProjectsViewModel>()
-                            .fetchProjects(widget.organization['id'].toString());
+                        context.read<ProjectsViewModel>().fetchProjects(
+                            widget.organization['id'].toString());
                       });
                     },
                   )
@@ -414,7 +441,8 @@ class _ProjectsListState extends State<ProjectsList> with WidgetsBindingObserver
             const SizedBox(height: 8),
             Text(
               title,
-              style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
+              style:
+                  GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
             Row(

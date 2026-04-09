@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../models/project.dart';
+import '../../models/financial_transaction.dart';
 import 'task_list_screen.dart';
 import 'edit_proj_screen.dart';
 import '../../viewmodels/tasks_viewmodel.dart';
@@ -29,7 +30,8 @@ class ProjectOverviewScreen extends StatefulWidget {
   State<ProjectOverviewScreen> createState() => _ProjectOverviewScreenState();
 }
 
-class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with WidgetsBindingObserver {
+class _ProjectOverviewScreenState extends State<ProjectOverviewScreen>
+    with WidgetsBindingObserver {
   int _selectedIndex = 1;
   bool _isAdmin = false;
   final AdminService _adminService = AdminService();
@@ -75,15 +77,7 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
       final projectsVM = context.read<ProjectsViewModel>();
       final financialVM = context.read<FinancialViewModel>();
       final projectId = widget.project!.id;
-      final organizationId = widget.organization['id'];
-      
-      // Task financial tracking is handled through transactions.
-      const double totalIncome = 0.0;
-      const double totalExpense = 0.0;
-      const double netAmount = 0.0;
-      
-      print('Project completion: Income=$totalIncome, Expense=$totalExpense, Net=$netAmount');
-      
+
       // Update project status to completed
       final success = await projectsVM.updateProject(
         projectId,
@@ -99,49 +93,24 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
         return;
       }
 
-      // Record the project completion transaction and update depository
+      // Do not post a bulk "Project Completed" financial adjustment.
+      // Task and manual project transactions are already reflected in the depository.
+      final organizationId = widget.organization['id']?.toString();
       if (organizationId != null) {
-        try {
-          financialVM.setCurrentOrganization(organizationId);
-          
-          // Create financial transaction for project completion
-          await financialVM.createTransaction({
-            'title': 'Project Completed: ${widget.project?.name}',
-            'transaction_type': netAmount >= 0 ? 'income' : 'expense',
-            'amount': netAmount.abs(),
-            'category': 'Project Completion',
-            'department': 'Projects',
-            'description': 'Project completion net adjustment (Income: ₱$totalIncome - Expense: ₱$totalExpense)',
-            'project_id': projectId,
-            'occurred_at': DateTime.now().toIso8601String(),
-          });
-          
-          print('Transaction recorded for project completion');
-          
-          // Refresh financial data
-          await financialVM.fetchTransactions(organizationId);
-          
-          print('Depository updated with net amount: $netAmount');
-        } catch (e) {
-          print('Error recording project completion transaction: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Note: Project completed, but could not update depository: $e')),
-            );
-            return;
-          }
-        }
+        await financialVM.fetchTransactions(organizationId);
       }
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Project "${widget.project?.name}" marked as completed (Net: ₱${netAmount.toStringAsFixed(2)})')),
+        SnackBar(
+          content: Text(
+            'Project "${widget.project?.name}" marked as completed')),
       );
-      
+
       // Refresh completed projects list
       await projectsVM.fetchCompletedProjects();
-      
+
       // Navigate back after a short delay
       await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
@@ -168,11 +137,20 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
     if (widget.project != null && widget.project!.id.isNotEmpty) {
       final projectId = widget.project!.id;
       final orgId = widget.organization['id'];
-      
+
       // Fetch tasks for this project
       context.read<TasksViewModel>().fetchProjectTasks(projectId);
       // Fetch ALL transactions for the organization to ensure financial data is accurate
       context.read<FinancialViewModel>().fetchTransactions(orgId);
+    }
+  }
+
+  void _handleTaskListTabResult(dynamic result) {
+    if (result is int && result != 1) {
+      widget.onTabChange?.call(result);
+      if (mounted) {
+        Navigator.pop(context);
+      }
     }
   }
 
@@ -181,7 +159,7 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
     if (widget.project != null && widget.project!.id.isNotEmpty) {
       final projectId = widget.project!.id;
       final orgId = widget.organization['id'];
-      
+
       // Await both fetch operations to complete
       await Future.wait([
         context.read<TasksViewModel>().fetchProjectTasks(projectId),
@@ -289,7 +267,8 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
             children: [
               Text(
                 "${tasksVM.tasks.length} Tasks",
-                style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16),
+                style: GoogleFonts.inter(
+                    fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 12),
               ...tasksVM.tasks.take(3).map((task) {
@@ -303,28 +282,39 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                         MaterialPageRoute(
                           builder: (context) => TaskListScreen(
                             projectId: widget.project?.id ?? '',
-                            organizationId: widget.organization['id'].toString(),
+                            organizationId:
+                                widget.organization['id'].toString(),
                             projectName: widget.project?.name ?? 'Project',
+                            onTabChange: widget.onTabChange,
                           ),
                         ),
-                      ).then((_) {
-                        // Refresh when returning from task list
-                        _loadProjectData();
+                      ).then((result) {
+                        if (result is int && result != 1) {
+                          _handleTaskListTabResult(result);
+                        } else {
+                          _loadProjectData();
+                        }
                       });
                     },
                     child: Row(
                       children: [
                         Icon(
-                          isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+                          isCompleted
+                              ? Icons.check_circle
+                              : Icons.radio_button_unchecked,
                           size: 18,
-                          color: isCompleted ? Colors.green : const Color(0xFFD1D5DB),
+                          color: isCompleted
+                              ? Colors.green
+                              : const Color(0xFFD1D5DB),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             task.title,
                             style: GoogleFonts.inter(
-                              decoration: isCompleted ? TextDecoration.lineThrough : null,
+                              decoration: isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
                               color: isCompleted ? Colors.grey : Colors.black,
                             ),
                           ),
@@ -345,13 +335,22 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                           projectId: widget.project?.id ?? '',
                           organizationId: widget.organization['id'].toString(),
                           projectName: widget.project?.name ?? 'Project',
+                          onTabChange: widget.onTabChange,
                         ),
                       ),
-                    );
+                    ).then((result) {
+                      if (result is int && result != 1) {
+                        _handleTaskListTabResult(result);
+                      } else {
+                        _loadProjectData();
+                      }
+                    });
                   },
                   child: Text(
                     "View all ${tasksVM.tasks.length} tasks →",
-                    style: GoogleFonts.inter(color: const Color(0xFF137FEC), fontWeight: FontWeight.w600),
+                    style: GoogleFonts.inter(
+                        color: const Color(0xFF137FEC),
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
               ],
@@ -367,12 +366,14 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
       backgroundColor: Colors.white,
       elevation: 0,
       leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF111418), size: 20),
+        icon: const Icon(Icons.arrow_back_ios,
+            color: Color(0xFF111418), size: 20),
         onPressed: () => Navigator.pop(context),
       ),
       title: Text(
         widget.project?.name ?? "Project Overview",
-        style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
+        style: GoogleFonts.inter(
+            color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
       ),
       centerTitle: true,
       actions: [
@@ -415,7 +416,8 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                   value: 'complete',
                   child: Row(
                     children: [
-                      Icon(Icons.check_circle_outline, size: 18, color: Color(0xFF137FEC)),
+                      Icon(Icons.check_circle_outline,
+                          size: 18, color: Color(0xFF137FEC)),
                       SizedBox(width: 8),
                       Text('Mark Complete'),
                     ],
@@ -431,18 +433,17 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
   Widget _buildMainProgressCard() {
     final projectName = widget.project?.name ?? 'CS Gala Preparation';
     final budget = widget.project?.budget ?? 0;
-    
+
     return Consumer<TasksViewModel>(
       builder: (context, tasksVM, _) {
         // Calculate progress based on actual tasks
         double progress = 0.0;
         if (tasksVM.tasks.isNotEmpty) {
-          final completedCount = tasksVM.tasks
-                  .where((task) => task.isCompleted)
-              .length;
+          final completedCount =
+              tasksVM.tasks.where((task) => task.isCompleted).length;
           progress = completedCount / tasksVM.tasks.length;
         }
-        
+
         return Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
@@ -464,7 +465,8 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                     child: CircularProgressIndicator(
                       value: progress,
                       strokeWidth: 12,
-                      backgroundColor: const Color(0xFF137FEC).withValues(alpha: 0.1),
+                      backgroundColor:
+                          const Color(0xFF137FEC).withValues(alpha: 0.1),
                       color: const Color(0xFF137FEC),
                       strokeCap: StrokeCap.round,
                     ),
@@ -472,23 +474,35 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text("${(progress * 100).toInt()}%", style: GoogleFonts.inter(fontSize: 32, fontWeight: FontWeight.bold)),
-                      Text("COMPLETED", style: GoogleFonts.inter(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w500)),
+                      Text("${(progress * 100).toInt()}%",
+                          style: GoogleFonts.inter(
+                              fontSize: 32, fontWeight: FontWeight.bold)),
+                      Text("COMPLETED",
+                          style: GoogleFonts.inter(
+                              fontSize: 10,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w500)),
                     ],
                   )
                 ],
               ),
               const SizedBox(height: 24),
-              Text(projectName, textAlign: TextAlign.center, style: GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text(projectName,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                      fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
-              Text("Budget: ₱${budget.toString()}", style: GoogleFonts.inter(color: const Color(0xFF617589))),
+              Text("Budget: ₱${budget.toString()}",
+                  style: GoogleFonts.inter(color: const Color(0xFF617589))),
               const SizedBox(height: 24),
               // Add linear progress indicator to match project card
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text("Progress", style: TextStyle(fontWeight: FontWeight.w500)),
-                  Text("${(progress * 100).toInt()}%", style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const Text("Progress",
+                      style: TextStyle(fontWeight: FontWeight.w500)),
+                  Text("${(progress * 100).toInt()}%",
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(height: 8),
@@ -509,25 +523,63 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
       builder: (context, financialVM, tasksVM, _) {
         final projectBudget = widget.project?.budget ?? 0.0;
         final projectId = widget.project?.id;
-        
-        // Calculate budget utilized and income from COMPLETED TASKS (not transactions)
-        double budgetUtilized = 0.0;
-        double projectIncome = 0.0;
-        
-        if (projectId != null) {
-          for (final task in tasksVM.tasks) {
-            // Only count completed tasks in this project
-            if (task.projectId == projectId && task.isCompleted) {
-              // Note: estimated_expense and deduct_from_budget fields not available in Task model
-              // These would need to be added to the Task model or sourced from elsewhere
-            }
-          }
-        }
-        
-        final utilizationPercent = projectBudget > 0 ? (budgetUtilized / projectBudget) : 0.0;
-        final estimatedTotal = budgetUtilized > 0 ? (budgetUtilized / (utilizationPercent > 0 ? utilizationPercent : 1.0)) : projectBudget;
+
+        final completedTasks = projectId == null
+            ? const <dynamic>[]
+            : tasksVM.tasks
+                .where(
+                    (task) => task.projectId == projectId && task.isCompleted)
+                .toList();
+
+        final taskBudgetUtilized = completedTasks
+            .where((task) => task.deductFromBudget == true)
+            .fold<double>(
+                0.0, (sum, task) => sum + (task.estimatedExpense ?? 0));
+
+        final taskIncome = completedTasks
+            .where((task) => task.deductFromBudget == false)
+            .fold<double>(
+                0.0, (sum, task) => sum + (task.estimatedExpense ?? 0));
+
+        final projectTransactions = projectId == null
+            ? const <FinancialTransaction>[]
+            : financialVM.transactions
+                .where((transaction) => transaction.projectId == projectId)
+                .toList();
+
+        final nonTaskExpense = projectTransactions.where((transaction) {
+          final title = transaction.title.toLowerCase();
+          final isInternalTransfer = title.contains('budget allocation') ||
+            title.contains('budget adjustment');
+          final isTaskTransaction =
+            (transaction.taskId?.isNotEmpty ?? false) ||
+              title.startsWith('task:');
+          return transaction.isExpense &&
+            !isInternalTransfer &&
+            !isTaskTransaction;
+        }).fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
+
+        final nonTaskIncome = projectTransactions.where((transaction) {
+          final title = transaction.title.toLowerCase();
+          final isInternalTransfer = title.contains('budget allocation') ||
+            title.contains('budget adjustment');
+          final isTaskTransaction =
+            (transaction.taskId?.isNotEmpty ?? false) ||
+              title.startsWith('task:');
+          return transaction.isIncome && !isInternalTransfer && !isTaskTransaction;
+        }).fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
+
+        final budgetUtilized = taskBudgetUtilized + nonTaskExpense;
+        final projectIncome = taskIncome + nonTaskIncome;
+
+        final utilizationPercent =
+            projectBudget > 0 ? (budgetUtilized / projectBudget) : 0.0;
+        final estimatedTotal = budgetUtilized > 0
+            ? (budgetUtilized /
+                (utilizationPercent > 0 ? utilizationPercent : 1.0))
+            : projectBudget;
         final isOnTrack = utilizationPercent <= 0.75;
-        
+
         return Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
@@ -543,15 +595,21 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF137FEC), size: 20),
+                      const Icon(Icons.account_balance_wallet_outlined,
+                          color: Color(0xFF137FEC), size: 20),
                       const SizedBox(width: 8),
-                      Text("Financial Status", style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text("Financial Status",
+                          style: GoogleFonts.inter(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
                     ],
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: isOnTrack ? const Color(0xFFE8F5E9) : const Color(0xFFFFEBEE),
+                      color: isOnTrack
+                          ? const Color(0xFFE8F5E9)
+                          : const Color(0xFFFFEBEE),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -569,7 +627,8 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("Budget Utilized", style: GoogleFonts.inter(color: const Color(0xFF617589))),
+                  Text("Budget Utilized",
+                      style: GoogleFonts.inter(color: const Color(0xFF617589))),
                   Text(
                     "₱${budgetUtilized.toStringAsFixed(2)} / ₱${projectBudget.toStringAsFixed(2)}",
                     style: GoogleFonts.inter(fontWeight: FontWeight.bold),
@@ -589,18 +648,22 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
               const SizedBox(height: 12),
               Text(
                 "Estimated completion cost: ₱${estimatedTotal.toStringAsFixed(2)}",
-                style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF9CA3AF)),
+                style: GoogleFonts.inter(
+                    fontSize: 12, color: const Color(0xFF9CA3AF)),
               ),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text("Income Made", style: GoogleFonts.inter(color: const Color(0xFF617589))),
+                  Text("Income Made",
+                      style: GoogleFonts.inter(color: const Color(0xFF617589))),
                   Text(
                     "₱${projectIncome.toStringAsFixed(2)}",
                     style: GoogleFonts.inter(
                       fontWeight: FontWeight.bold,
-                      color: projectIncome > 0 ? const Color(0xFF10B981) : const Color(0xFF6B7280),
+                      color: projectIncome > 0
+                          ? const Color(0xFF10B981)
+                          : const Color(0xFF6B7280),
                     ),
                   ),
                 ],
@@ -616,7 +679,9 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
     return Container(
       width: double.infinity,
       height: 72,
-      decoration: BoxDecoration(color: const Color(0xFF137FEC), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+          color: const Color(0xFF137FEC),
+          borderRadius: BorderRadius.circular(16)),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -629,11 +694,15 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                   projectId: widget.project?.id ?? '',
                   organizationId: widget.organization['id'].toString(),
                   projectName: widget.project?.name ?? 'Project',
+                  onTabChange: widget.onTabChange,
                 ),
               ),
-            ).then((_) {
-              // Refresh data when returning from task list
-              _forceRefresh();
+            ).then((result) {
+              if (result is int && result != 1) {
+                _handleTaskListTabResult(result);
+              } else {
+                _forceRefresh();
+              }
             });
           },
           child: Padding(
@@ -642,7 +711,9 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
               children: [
                 Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(10)),
+                  decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(10)),
                   child: const Icon(Icons.checklist, color: Colors.white),
                 ),
                 const SizedBox(width: 16),
@@ -650,12 +721,20 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Task List", style: GoogleFonts.inter(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text("View all tasks", style: GoogleFonts.inter(color: Colors.white.withValues(alpha: 0.8), fontSize: 12)),
+                    Text("Task List",
+                        style: GoogleFonts.inter(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16)),
+                    Text("View all tasks",
+                        style: GoogleFonts.inter(
+                            color: Colors.white.withValues(alpha: 0.8),
+                            fontSize: 12)),
                   ],
                 ),
                 const Spacer(),
-                const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                const Icon(Icons.arrow_forward_ios,
+                    color: Colors.white, size: 16),
               ],
             ),
           ),
@@ -667,12 +746,14 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
   Widget _buildBottomNav(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.9), border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
+      decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.9),
+          border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
       child: BottomNavigationBar(
         currentIndex: _selectedIndex,
         onTap: (index) {
           if (index == _selectedIndex) return;
-          
+
           // If we have an onTabChange callback, use it to switch tabs
           if (widget.onTabChange != null) {
             Navigator.pop(context);
@@ -689,10 +770,15 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
         unselectedItemColor: const Color(0xFF9CA3AF),
         showUnselectedLabels: true,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: "Dashboard"),
-          BottomNavigationBarItem(icon: Icon(Icons.assignment_outlined), label: "Projects"),
-          BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), label: "Finances"),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.grid_view_rounded), label: "Dashboard"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.assignment_outlined), label: "Projects"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.account_balance_wallet_outlined),
+              label: "Finances"),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline), label: "Profile"),
         ],
       ),
     );

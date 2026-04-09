@@ -9,6 +9,9 @@ class Task {
   final String? category;
   final String? status; // pending, in_progress, completed, etc.
   final String? priority; // low, medium, high, urgent
+  final double? estimatedExpense;
+  final String? expenseCategory;
+  final bool? deductFromBudget;
   final DateTime? dueDate;
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -24,6 +27,9 @@ class Task {
     this.category,
     this.status,
     this.priority,
+    this.estimatedExpense,
+    this.expenseCategory,
+    this.deductFromBudget,
     this.dueDate,
     required this.createdAt,
     this.updatedAt,
@@ -35,13 +41,17 @@ class Task {
     return Task(
       id: map['id'] as String? ?? '',
       projectId: map['project_id'] as String? ?? '',
-      assigneeId: map['assignee_id'] as String?,
-      assigneeName: map['assignee_name'] as String?,
+      assigneeId: map['assignee_id'] as String? ?? map['assignee'] as String?,
+      assigneeName:
+          map['assignee_name'] as String? ?? map['assignee'] as String?,
       title: map['title'] as String? ?? '',
       description: map['description'] as String?,
       category: map['category'] as String?,
       status: map['status'] as String?,
       priority: map['priority'] as String?,
+      estimatedExpense: _toDouble(map['estimated_expense']),
+      expenseCategory: map['expense_category'] as String?,
+      deductFromBudget: map['deduct_from_budget'] as bool?,
       dueDate: map['due_date'] != null
           ? DateTime.parse(map['due_date'] as String)
           : null,
@@ -63,12 +73,16 @@ class Task {
       'id': id,
       'project_id': projectId,
       'assignee_id': assigneeId,
+      'assignee': assigneeId,
       'assignee_name': assigneeName,
       'title': title,
       'description': description,
       'category': category,
       'status': status,
       'priority': priority,
+      'estimated_expense': estimatedExpense,
+      'expense_category': expenseCategory,
+      'deduct_from_budget': deductFromBudget,
       'due_date': dueDate?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
@@ -87,6 +101,9 @@ class Task {
     String? category,
     String? status,
     String? priority,
+    double? estimatedExpense,
+    String? expenseCategory,
+    bool? deductFromBudget,
     DateTime? dueDate,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -102,6 +119,9 @@ class Task {
       category: category ?? this.category,
       status: status ?? this.status,
       priority: priority ?? this.priority,
+      estimatedExpense: estimatedExpense ?? this.estimatedExpense,
+      expenseCategory: expenseCategory ?? this.expenseCategory,
+      deductFromBudget: deductFromBudget ?? this.deductFromBudget,
       dueDate: dueDate ?? this.dueDate,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -125,10 +145,16 @@ class Task {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Task &&
-          runtimeType == other.runtimeType &&
-          id == other.id;
+      other is Task && runtimeType == other.runtimeType && id == other.id;
 
   @override
   int get hashCode => id.hashCode;
+}
+
+double? _toDouble(dynamic value) {
+  if (value == null) return null;
+  if (value is double) return value;
+  if (value is int) return value.toDouble();
+  if (value is String) return double.tryParse(value);
+  return null;
 }

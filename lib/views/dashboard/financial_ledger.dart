@@ -81,13 +81,15 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   Widget build(BuildContext context) {
     final groupedTransactions = _viewModel.groupedTransactions;
 
-    return Stack(
-      children: [
-        RefreshIndicator(
-          onRefresh: _fetchTransactions,
-          color: const Color(0xFF137FEC),
-          backgroundColor: Colors.white,
-          child: ListView(
+    return Material(
+      color: Colors.white,
+      child: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _fetchTransactions,
+            color: const Color(0xFF137FEC),
+            backgroundColor: Colors.white,
+            child: ListView(
             padding: const EdgeInsets.only(bottom: 100, top: 50),
             children: [
               _buildBalanceCard(),
@@ -111,6 +113,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
         ),
         _buildFloatingActionButton(),
       ],
+    ),
     );
   }
 
