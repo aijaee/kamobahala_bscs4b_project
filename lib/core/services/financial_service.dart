@@ -1,9 +1,11 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../models/financial_transaction.dart';
+
 class FinancialService {
   final SupabaseClient _client = Supabase.instance.client;
 
   /// Fetches all transactions for a specific organization
-  Future<List<Map<String, dynamic>>> fetchTransactions(String organizationId) async {
+  Future<List<FinancialTransaction>> fetchTransactions(String organizationId) async {
     final response = await _client
         .from('financial_transactions')
         .select()
@@ -11,10 +13,12 @@ class FinancialService {
         .order('occurred_at', ascending: false)
         .order('created_at', ascending: false);
 
-    return List<Map<String, dynamic>>.from(response);
+    return (response as List)
+        .map((t) => FinancialTransaction.fromMap(t as Map<String, dynamic>))
+        .toList();
   }
 
-  Future<Map<String, dynamic>> createTransaction(
+  Future<FinancialTransaction> createTransaction(
     String organizationId,
     Map<String, dynamic> transactionData,
   ) async {
@@ -30,7 +34,7 @@ class FinancialService {
         .select()
         .single();
 
-    return response;
+    return FinancialTransaction.fromMap(response);
   }
 
   /// Delete a transaction by its ID
@@ -44,6 +48,26 @@ class FinancialService {
     } catch (e) {
       print('Error deleting transaction: $e');
       return false;
+    }
+  }
+
+  /// Update a transaction by its ID
+  Future<FinancialTransaction?> updateTransaction(
+    String transactionId,
+    Map<String, dynamic> updates,
+  ) async {
+    try {
+      final response = await _client
+          .from('financial_transactions')
+          .update(updates)
+          .eq('id', transactionId)
+          .select()
+          .single();
+
+      return FinancialTransaction.fromMap(response);
+    } catch (e) {
+      print('Error updating transaction: $e');
+      return null;
     }
   }
 

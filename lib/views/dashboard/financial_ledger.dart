@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../viewmodels/financial_viewmodel.dart';
 import '../../viewmodels/organization_dashboard_viewmodel.dart';
 import '../../core/services/admin_service.dart';
+import '../../models/financial_transaction.dart';
 
 class FinancialLedgerScreen extends StatefulWidget {
   final int initialIndex;
@@ -110,50 +111,6 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
         ),
         _buildFloatingActionButton(),
       ],
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Center(
-        child: Text(
-          "Financial Ledger",
-          style: GoogleFonts.inter(
-            color: const Color(0xFF111418),
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    return AppBar(
-      backgroundColor: Colors.white.withValues(alpha: 0.8),
-      elevation: 0,
-      centerTitle: true,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios,
-            color: Color(0xFF111418), size: 20),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: Text(
-        "Financial Ledger",
-        style: GoogleFonts.inter(
-          color: const Color(0xFF111418),
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.more_horiz, color: Color(0xFF111418)),
-          onPressed: () {},
-        ),
-      ],
-      shape: const Border(bottom: BorderSide(color: Color(0x0D137FEC))),
     );
   }
 
@@ -293,22 +250,19 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     );
   }
 
-  Widget _buildTransactionRow(Map<String, dynamic> transaction) {
-    final amount = _viewModel.getSignedAmount(transaction);
-    final occurredAt = DateTime.tryParse(
-          transaction['occurred_at']?.toString() ?? '',
-        ) ??
-        DateTime.now();
+  Widget _buildTransactionRow(FinancialTransaction transaction) {
+    final amount = transaction.isIncome ? transaction.amount : -transaction.amount;
+    final occurredAt = transaction.occurredAt;
     final department =
-        (transaction['department']?.toString().trim().isNotEmpty ?? false)
-            ? transaction['department'].toString()
+        (transaction.department?.trim().isNotEmpty ?? false)
+            ? transaction.department.toString()
             : 'General';
     final description =
-        (transaction['description']?.toString().trim().isNotEmpty ?? false)
-            ? transaction['description'].toString()
+        (transaction.description?.trim().isNotEmpty ?? false)
+            ? transaction.description.toString()
             : (amount > 0 ? 'Incoming funds' : 'Expense recorded');
     final deptColor = _departmentColor(department);
-    final title = transaction['title']?.toString() ?? 'Untitled transaction';
+    final title = transaction.title;
 
     // Check if this is a budget allocation
     final isBudgetAllocation = title.contains('Budget Allocation') ||
@@ -384,7 +338,9 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
               Text(
                 isBudgetAllocation
                     ? _formatCurrency(amount.abs())
-                    : '${isIncome ? '+' : '-'}${_formatCurrency(amount.abs())}',
+                    : amount == 0 
+                        ? _formatCurrency(amount.abs())
+                        : '${isIncome ? '+' : '-'}${_formatCurrency(amount.abs())}',
                 style: GoogleFonts.inter(
                   color: isBudgetAllocation
                       ? const Color(
@@ -716,31 +672,6 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
     });
   }
 
-  double _toDouble(dynamic value) {
-    if (value is num) {
-      return value.toDouble();
-    }
-    return double.tryParse(value?.toString() ?? '') ?? 0.0;
-  }
-
-  String _formatCurrency(double amount) {
-    final absolute = amount.abs().toStringAsFixed(2);
-    final parts = absolute.split('.');
-    final whole = parts[0];
-    final decimals = parts[1];
-    final buffer = StringBuffer();
-
-    for (var index = 0; index < whole.length; index++) {
-      final reversedIndex = whole.length - index;
-      buffer.write(whole[index]);
-      if (reversedIndex > 1 && reversedIndex % 3 == 1) {
-        buffer.write(',');
-      }
-    }
-
-    return '₱${buffer.toString()}.$decimals';
-  }
-
   Future<void> _saveTransaction() async {
     setState(() => _errorMessage = null);
     final amount = double.tryParse(_amountController.text.trim());
@@ -759,7 +690,8 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
             title.toLowerCase().contains('budget adjustment');
 
     if (isExpense && !isBudgetAllocation) {
-      final openingBudget = _toDouble(widget.organization['budget']);
+        final openingBudget =
+          (widget.organization['budget'] as num?)?.toDouble() ?? 0.0;
       final transactionSum = widget.viewModel.currentBalance;
       final totalAvailableBalance = openingBudget + transactionSum;
 

@@ -3,13 +3,13 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'edit_task_screen.dart';
 import '../../viewmodels/tasks_viewmodel.dart';
-import '../../viewmodels/financial_viewmodel.dart';
+import '../../models/organization_member.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/organization_service.dart';
 import '../../core/services/project_service.dart';
 
 class TaskDetailsScreen extends StatefulWidget {
-  final Map<String, dynamic> task;
+  final dynamic task; // Can be Task or Map for legacy compatibility
 
   const TaskDetailsScreen({
     super.key,
@@ -65,10 +65,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
   Future<void> _toggleTaskCompletion() async {
     try {
-      final taskId = widget.task['id'];
-      final organizationId = widget.task['organization_id'];
+      final taskId = widget.task.id;
       
-      if (taskId == null) {
+      if (taskId.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Unable to update task - missing ID')),
         );
@@ -80,7 +79,6 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
       // Get viewmodels from Provider
       final tasksViewModel = context.read<TasksViewModel>();
-      final financialViewModel = context.read<FinancialViewModel>();
 
       // Update task status through ViewModel (this will notify listeners)
       final updateSuccess = await tasksViewModel.updateTask(taskId, {'status': newStatus});
@@ -94,35 +92,22 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         return;
       }
 
-      // If marking as completed, update the project budget
+    // If marking as completed, update the project budget
       if (isMarkedComplete) {
-        final estimatedAmount = (widget.task['estimated_expense'] ?? 0.0) as num;
-        final deductFromBudget = widget.task['deduct_from_budget'] ?? false;
         final projectId = widget.task['project_id'];
 
-        if (estimatedAmount > 0 && projectId != null) {
+        if (projectId != null) {
           try {
             // Fetch current project to get its budget
             final projectService = ProjectService();
             final project = await projectService.fetchProject(projectId);
-            final currentBudget = (project['budget'] as num?)?.toDouble() ?? 0.0;
+            final currentBudget = project.budget ?? 0.0;
             
-            // Calculate new budget based on task type
-            // If deduct_from_budget=true: subtract (expense)
-            // If deduct_from_budget=false: add (income)
-            final amountChange = deductFromBudget 
-              ? estimatedAmount.toDouble() 
-              : estimatedAmount.toDouble();
-            final newBudget = deductFromBudget
-              ? currentBudget - amountChange
-              : currentBudget + amountChange;
+            print('Project budget fetched: $currentBudget');
             
-            print('Updating project budget: Current=$currentBudget, Amount=$amountChange, Type=${deductFromBudget ? 'Expense' : 'Income'}, New=$newBudget');
-            
-            // Update project budget
-            await projectService.updateProject(projectId, {'budget': newBudget});
-            
-            print('Project budget updated successfully to $newBudget');
+            // TODO: [REFACTORING] Financial tracking for tasks needs to be re-implemented
+            // The Task model no longer stores estimated_expense and deduct_from_budget
+            // These should be stored in a separate financial tracking system
           } catch (e) {
             print('Error updating project budget: $e');
             if (mounted) {
@@ -134,31 +119,20 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         }
       } else {
         // If unchecking (marking as not completed), reverse the budget change
-        final estimatedAmount = (widget.task['estimated_expense'] ?? 0.0) as num;
-        final deductFromBudget = widget.task['deduct_from_budget'] ?? false;
         final projectId = widget.task['project_id'];
 
-        if (estimatedAmount > 0 && projectId != null) {
+        if (projectId != null) {
           try {
             // Fetch current project to get its budget
             final projectService = ProjectService();
             final project = await projectService.fetchProject(projectId);
-            final currentBudget = (project['budget'] as num?)?.toDouble() ?? 0.0;
+            final currentBudget = project.budget ?? 0.0;
             
-            // Reverse the budget change
-            final amountChange = deductFromBudget 
-              ? estimatedAmount.toDouble() 
-              : estimatedAmount.toDouble();
-            final newBudget = deductFromBudget
-              ? currentBudget + amountChange  // Add back if it was deducted
-              : currentBudget - amountChange; // Subtract if it was added
+            print('Reversing project budget: Current=$currentBudget');
             
-            print('Reversing project budget: Current=$currentBudget, Amount=$amountChange, New=$newBudget');
-            
-            // Update project budget back to original
-            await projectService.updateProject(projectId, {'budget': newBudget});
-            
-            print('Project budget reversed successfully to $newBudget');
+            // TODO: [REFACTORING] Financial tracking for tasks needs to be re-implemented
+            // The Task model no longer stores estimated_expense and deduct_from_budget
+            // These should be stored in a separate financial tracking system
           } catch (e) {
             print('Error reversing project budget: $e');
             if (mounted) {
@@ -321,13 +295,20 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         if (organizationId == null) return assigneeEmail;
         
         final members = await _orgService.getOrganizationMembers(organizationId);
-        final member = members.firstWhere(
-          (m) => m['email'] == assigneeEmail,
-          orElse: () => {},
-        );
         
-        if (member.isNotEmpty && member['name'] != null) {
-          return member['name'].toString();
+        // Find member by email from the typed list
+        OrganizationMember? member;
+        try {
+          member = members.firstWhere(
+            (m) => m.email == assigneeEmail,
+          );
+        } catch (e) {
+          // Member not found
+          return assigneeEmail;
+        }
+        
+        if (member.fullName != null && member.fullName!.isNotEmpty) {
+          return member.fullName!;
         }
       } catch (e) {
         // Continue with email fallback

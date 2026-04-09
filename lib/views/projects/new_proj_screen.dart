@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'projects_list.dart';
 import '../../viewmodels/projects_viewmodel.dart';
 import '../../viewmodels/financial_viewmodel.dart';
+import '../../models/financial_transaction.dart';
 
 // ── Brand constants (shared with CreateOrganizationScreen) ───────────────────
 const kPrimary = Color(0xFF1A73E8);
@@ -128,9 +128,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
       // Calculate income and expenses from transactions
       for (final transaction in financialViewModel.transactions) {
-        final title = (transaction['title'] ?? '').toString();
-        final isInternalTransfer = title.contains('Budget Allocation') || 
-                                  title.contains('Budget Adjustment');
+        final title = transaction.title.toLowerCase();
+        final isInternalTransfer = title.contains('budget allocation') || 
+                                  title.contains('budget adjustment');
         
         if (!isInternalTransfer) {
           final signedAmount = _getSignedAmount(transaction);
@@ -150,10 +150,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   }
 
   /// Get signed amount for a transaction (positive for income, negative for expense)
-  double _getSignedAmount(Map<String, dynamic> transaction) {
-    final amount = _toDouble(transaction['amount']).abs();
-    final type = (transaction['transaction_type'] ?? 'expense').toString().toLowerCase();
-    return type == 'income' ? amount : -amount;
+  double _getSignedAmount(FinancialTransaction transaction) {
+    final amount = transaction.amount.abs();
+    return transaction.isIncome ? amount : -amount;
   }
 
   double _toDouble(dynamic value) {
@@ -186,10 +185,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close, color: kRed),
-          onPressed: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization)),
-          ),
+          onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           "New Project",

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kamobahala_bscs4b_project/viewmodels/financial_viewmodel.dart';
-
+import '../../models/project.dart';
 import '../../viewmodels/projects_viewmodel.dart';
 
 // ── Brand constants (shared with CreateOrganizationScreen) ───────────────────
@@ -48,17 +48,13 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     });
   }
 
-  void _initializeForm(Map<String, dynamic> project) {
-    nameController.text = project['name']?.toString() ?? '';
-    descriptionController.text = project['description']?.toString() ?? '';
-    budgetController.text = project['budget']?.toString() ?? '';
+  void _initializeForm(Project project) {
+    nameController.text = project.name;
+    descriptionController.text = project.description ?? '';
+    budgetController.text = project.budget?.toString() ?? '';
 
-    startDate = project['start_date'] is String
-        ? DateTime.tryParse(project['start_date'])
-        : project['start_date'] as DateTime?;
-    endDate = project['due_date'] is String
-        ? DateTime.tryParse(project['due_date'])
-        : project['due_date'] as DateTime?;
+    startDate = project.startDate;
+    endDate = project.endDate;
   }
 
   // ── Shared input decoration ─────────────────────────────────────────────────
@@ -324,7 +320,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     
     // Get the existing budget (old budget before edit)
     final existingProjectBudget = 
-        _toDouble((viewModel.currentProject?['budget'] ?? '0').toString());
+        _toDouble((viewModel.currentProject?.budget ?? 0).toString());
     
     // Calculate the amount being added to the budget
     final budgetIncrease = newBudget - existingProjectBudget;
@@ -342,15 +338,6 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
         setState(() {
           _validationError = errorMessage;
         });
-        
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: kRed,
-            duration: const Duration(seconds: 4),
-          ),
-        );
         return;
       }
     }
@@ -510,7 +497,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     );
   }
 
-  Widget _buildBudgetCard(Map<String, dynamic>? project) {
+  Widget _buildBudgetCard(Project? project) {
     return Container(
       decoration: BoxDecoration(
           color: kCardBg,

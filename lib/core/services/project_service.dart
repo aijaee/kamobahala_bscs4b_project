@@ -1,15 +1,19 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../models/project.dart';
+
 class ProjectService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  Future<List<Map<String, dynamic>>> fetchProjects(String orgId) async {
+  Future<List<Project>> fetchProjects(String orgId) async {
     final response =
-        await _client.from('projects').select().eq('organization_id', orgId);
+        await _client.from('projects').select().eq('organization_id', orgId).neq('status', 'completed');
 
-    return List<Map<String, dynamic>>.from(response);
+    return (response as List)
+        .map((p) => Project.fromMap(p as Map<String, dynamic>))
+        .toList();
   }
 
-  Future<Map<String, dynamic>> createProject(
+  Future<Project> createProject(
       String orgId, Map<String, dynamic> projectData) async {
     final data = {
       ...projectData,
@@ -18,6 +22,8 @@ class ProjectService {
     };
     final response =
         await _client.from('projects').insert(data).select().single();
+
+    final project = Project.fromMap(response);
 
     // Create budget allocation transaction if budget is provided
     final budget = projectData['budget'];
@@ -31,7 +37,7 @@ class ProjectService {
       );
     }
 
-    return response;
+    return project;
   }
 
   /// Creates a budget allocation transaction in financial_transactions
@@ -67,7 +73,7 @@ class ProjectService {
   }
 
   /// Updates project repository/storage configuration
-  Future<Map<String, dynamic>> updateProjectRepository(
+  Future<Project> updateProjectRepository(
       String projectId, Map<String, dynamic> repoConfig) async {
     final response = await _client
         .from('projects')
@@ -75,22 +81,22 @@ class ProjectService {
         .eq('id', projectId)
         .select()
         .single();
-    return response;
+    return Project.fromMap(response);
   }
 
   /// Fetches project details including repository info
-  Future<Map<String, dynamic>> fetchProject(String projectId) async {
+  Future<Project> fetchProject(String projectId) async {
     final response =
         await _client.from('projects').select().eq('id', projectId).single();
-    return response;
+    return Project.fromMap(response);
   }
 
   /// Updates a project with new data and handles budget changes
-  Future<Map<String, dynamic>> updateProject(
+  Future<Project> updateProject(
       String projectId, Map<String, dynamic> updates) async {
     // Fetch old project to check for budget changes
     final oldProject = await fetchProject(projectId);
-    final oldBudget = (oldProject['budget'] as num?)?.toDouble() ?? 0;
+    final oldBudget = oldProject.budget ?? 0;
     final newBudget = (updates['budget'] as num?)?.toDouble() ?? oldBudget;
 
     final response = await _client
@@ -100,19 +106,21 @@ class ProjectService {
         .select()
         .single();
 
+    final updatedProject = Project.fromMap(response);
+
     // Handle budget changes
     if (newBudget != oldBudget && newBudget > 0) {
       await _createBudgetAllocationTransaction(
-        oldProject['organization_id'],
+        oldProject.organizationId,
         projectId,
-        updates['name'] ?? oldProject['name'] ?? 'Unnamed Project',
+        updates['name'] ?? oldProject.name,
         newBudget,
         DateTime.now().toIso8601String(),
         isBudgetAdjustment: newBudget > oldBudget,
       );
     }
 
-    return response;
+    return updatedProject;
   }
 
   /// Deletes a project
@@ -121,24 +129,28 @@ class ProjectService {
   }
 
   /// Fetches active projects for an organization (status != 'completed')
-  Future<List<Map<String, dynamic>>> fetchActiveProjects(String orgId) async {
+  Future<List<Project>> fetchActiveProjects(String orgId) async {
     final response = await _client
         .from('projects')
         .select()
         .eq('organization_id', orgId)
         .neq('status', 'completed');
 
-    return List<Map<String, dynamic>>.from(response);
+    return (response as List)
+        .map((p) => Project.fromMap(p as Map<String, dynamic>))
+        .toList();
   }
 
   /// Fetches completed projects for an organization
-  Future<List<Map<String, dynamic>>> fetchCompletedProjects(String orgId) async {
+  Future<List<Project>> fetchCompletedProjects(String orgId) async {
     final response = await _client
         .from('projects')
         .select()
         .eq('organization_id', orgId)
         .eq('status', 'completed');
 
-    return List<Map<String, dynamic>>.from(response);
+    return (response as List)
+        .map((p) => Project.fromMap(p as Map<String, dynamic>))
+        .toList();
   }
 }

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kamobahala_bscs4b_project/viewmodels/tasks_viewmodel.dart';
 import 'package:kamobahala_bscs4b_project/viewmodels/financial_viewmodel.dart';
+import 'package:kamobahala_bscs4b_project/models/organization_member.dart';
 import 'package:kamobahala_bscs4b_project/core/services/organization_service.dart';
 import 'package:kamobahala_bscs4b_project/core/services/project_service.dart';
 import 'package:kamobahala_bscs4b_project/core/services/task_service.dart';
@@ -38,7 +39,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   String? _selectedExpenseCategory;
   DateTime? _selectedDueDate;
   List<String> _categories = [];
-  List<Map<String, dynamic>> _teamMembers = [];
+  List<OrganizationMember> _teamMembers = [];
   String? _selectedAssigneeFullName;
   bool _isLoadingData = true;
   String? _loadError;
@@ -56,20 +57,17 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     super.initState();
     _taskNameController =
         TextEditingController(text: widget.task['title'] ?? '');
-    _estimatedExpenseController = TextEditingController(
-        text: (widget.task['estimated_expense'] ?? 0.0).toString());
+    _estimatedExpenseController = TextEditingController(text: '0.0');
     _noteController =
         TextEditingController(text: widget.task['description'] ?? '');
 
     _selectedPriority = widget.task['priority'] ?? 'Low';
     _selectedStatus = widget.task['status'] ?? 'todo';
-    _deductFromBudget = widget.task['deduct_from_budget'] ?? false;
+    _deductFromBudget = false;
     _selectedCategory = widget.task['category'] ?? 'Uncategorized';
     _selectedAssignee = widget.task['assignee'];
-    _selectedExpenseCategory =
-        widget.task['expense_category'] ?? 'Transportation';
-    _originalTaskExpense =
-        (widget.task['estimated_expense'] as num? ?? 0).toDouble();
+    _selectedExpenseCategory = 'Transportation';
+    _originalTaskExpense = 0.0;
 
     if (_selectedAssignee != null) {
       _loadAssigneeFullName(_selectedAssignee!);
@@ -92,28 +90,27 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     try {
       final projectService = ProjectService();
       final project = await projectService.fetchProject(widget.projectId);
-      final allocatedBudget = (project['budget'] as num? ?? 0).toDouble();
+      final allocatedBudget = project.budget ?? 0.0;
 
       final taskService = TaskService();
-      final projectTasks =
-          await taskService.fetchProjectTasks(widget.projectId);
+      await taskService.fetchProjectTasks(widget.projectId);
 
-      double existingTasksExpenses = projectTasks.fold(0.0, (sum, task) {
-        // Exclude the current task's old expense from the sum to avoid double-counting
-        final taskId = task['task_id'] ?? task['id'];
-        if (taskId == widget.taskId) {
-          return sum;
-        }
-        if (task['deduct_from_budget'] == true) {
-          final taskExpense = (task['estimated_expense'] as num?) ?? 0;
-          return sum + taskExpense.toDouble();
-        }
-        return sum;
-      });
+      // TODO: [REFACTORING] Financial tracking for tasks needs to be re-implemented
+      // The Task model no longer stores deduct_from_budget and estimated_expense
+      double existingTasksExpenses = 0.0;
 
       // Fetch depository balance from FinancialViewModel
       final financialVM = context.read<FinancialViewModel>();
-      final openingBudget = 0.0; // Will be fetched from organization
+      final orgService = OrganizationService();
+      final organizations = await orgService.getOrganizations();
+      double openingBudget = 0.0;
+      if (organizations.isNotEmpty) {
+        final currentOrg = organizations.firstWhere(
+          (org) => org.id == widget.organizationId,
+          orElse: () => organizations.first,
+        );
+        openingBudget = currentOrg.budget ?? 0.0;
+      }
       final depositoryBalance = financialVM.calculateAvailableBalance(openingBudget);
 
       if (mounted) {
@@ -145,6 +142,18 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       setState(() {
         _teamMembers = response;
         _categories = categories.map((c) => c['name'] as String).toList();
+        
+        // Provide default categories if none exist
+        if (_categories.isEmpty) {
+          _categories = [
+            'Development',
+            'Design',
+            'Marketing',
+            'Documentation',
+            'Testing',
+          ];
+        }
+        
         _isLoadingData = false;
       });
     } catch (e) {
@@ -158,12 +167,11 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   Future<void> _loadAssigneeFullName(String email) async {
     try {
       final member = _teamMembers.firstWhere(
-        (m) => m['email'] == email,
-        orElse: () => {},
+        (m) => m.email == email,
       );
-      if (member.isNotEmpty && mounted) {
+      if (mounted) {
         setState(() {
-          _selectedAssigneeFullName = member['name'];
+          _selectedAssigneeFullName = member.fullName;
         });
       }
     } catch (e) {
@@ -666,10 +674,9 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
             mainAxisSize: MainAxisSize.min,
             children: _teamMembers
                 .map((member) => ListTile(
-                      title:
-                          Text(member['name'] ?? member['email'] ?? 'Unknown'),
-                      subtitle: Text(member['email'] ?? ''),
-                      onTap: () => Navigator.pop(context, member['email']),
+                      title: Text(member.fullName ?? 'Unknown'),
+                      subtitle: Text(member.email),
+                      onTap: () => Navigator.pop(context, member.email),
                     ))
                 .toList(),
           ),
@@ -678,14 +685,20 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     );
     if (selected != null) {
       // Find the name of the selected member
-      final member = _teamMembers.firstWhere(
-        (m) => m['email'] == selected,
-        orElse: () => {},
-      );
-      setState(() {
-        _selectedAssignee = selected;
-        _selectedAssigneeFullName = member.isNotEmpty ? member['name'] : null;
-      });
+      try {
+        final member = _teamMembers.firstWhere(
+          (m) => m.email == selected,
+        );
+        setState(() {
+          _selectedAssignee = selected;
+          _selectedAssigneeFullName = member.fullName;
+        });
+      } catch (e) {
+        setState(() {
+          _selectedAssignee = selected;
+          _selectedAssigneeFullName = null;
+        });
+      }
     }
   }
 
