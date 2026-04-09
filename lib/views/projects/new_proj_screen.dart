@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodels/projects_viewmodel.dart';
 import '../../viewmodels/financial_viewmodel.dart';
-import '../../models/financial_transaction.dart';
 
 // ── Brand constants (shared with CreateOrganizationScreen) ───────────────────
 const kPrimary = Color(0xFF1A73E8);
@@ -32,6 +31,17 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
 
   DateTime? startDate;
   DateTime? endDate;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context
+          .read<FinancialViewModel>()
+          .fetchTransactions(widget.organization['id'].toString());
+    });
+  }
 
   // ── Shared input decoration ─────────────────────────────────────────────────
   InputDecoration _inputDecoration(String hint) {
@@ -118,41 +128,13 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     return "${_monthAbbr(date.month)} ${date.day}, ${date.year}";
   }
 
-  /// Calculate the actual depository balance: budget + income - expenses
-  double _calculateDepositoryBalance() {
-    try {
-      final financialViewModel = Provider.of<FinancialViewModel>(context, listen: false);
-      final budget = _toDouble(widget.organization['budget']);
-      double totalIncome = 0;
-      double totalExpenses = 0;
-
-      // Calculate income and expenses from transactions
-      for (final transaction in financialViewModel.transactions) {
-        final title = transaction.title.toLowerCase();
-        final isInternalTransfer = title.contains('budget allocation') || 
-                                  title.contains('budget adjustment');
-        
-        if (!isInternalTransfer) {
-          final signedAmount = _getSignedAmount(transaction);
-          if (signedAmount > 0) {
-            totalIncome += signedAmount;
-          } else {
-            totalExpenses += signedAmount.abs();
-          }
-        }
-      }
-
-      return budget + totalIncome - totalExpenses;
-    } catch (e) {
-      // Fallback to just the budget if there's an error
-      return _toDouble(widget.organization['budget']);
-    }
-  }
-
-  /// Get signed amount for a transaction (positive for income, negative for expense)
-  double _getSignedAmount(FinancialTransaction transaction) {
-    final amount = transaction.amount.abs();
-    return transaction.isIncome ? amount : -amount;
+  /// Get the true available balance from the FinancialViewModel.
+  /// This is the single source of truth for depository calculations.
+  double _getAvailableBalance() {
+    final financialViewModel =
+        Provider.of<FinancialViewModel>(context, listen: false);
+    final openingBudget = _toDouble(widget.organization['budget']);
+    return financialViewModel.calculateAvailableBalance(openingBudget);
   }
 
   double _toDouble(dynamic value) {
@@ -290,8 +272,15 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   Future<void> _handleCreateProject(BuildContext context, ProjectsViewModel viewModel) async {
     if (!_formKey.currentState!.validate()) return;
 
+    final financialViewModel = context.read<FinancialViewModel>();
+    final targetOrganizationId = widget.organization['id']?.toString();
+    if (targetOrganizationId != null &&
+        financialViewModel.currentOrganizationId != targetOrganizationId) {
+      await financialViewModel.fetchTransactions(targetOrganizationId);
+    }
+
     final inputBudget = _toDouble(budgetController.text);
-    final availableBalance = _calculateDepositoryBalance();
+    final availableBalance = _getAvailableBalance();
 
     if (inputBudget > availableBalance) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -529,7 +518,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           const SizedBox(height: 4),
           Consumer<FinancialViewModel>(
             builder: (context, financialViewModel, _) {
-              final balance = _calculateDepositoryBalance();
+              final balance = _getAvailableBalance();
               return Text(
                 "₱${balance.toStringAsFixed(2)}",
                 style: GoogleFonts.inter(

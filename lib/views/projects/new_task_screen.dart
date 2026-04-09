@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kamobahala_bscs4b_project/viewmodels/tasks_viewmodel.dart';
-import 'package:kamobahala_bscs4b_project/viewmodels/financial_viewmodel.dart';
 import 'package:kamobahala_bscs4b_project/core/services/organization_service.dart';
 import 'package:kamobahala_bscs4b_project/core/services/project_service.dart';
 import 'package:kamobahala_bscs4b_project/core/services/task_service.dart';
@@ -46,7 +45,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   double _projectBudget = 0.0;
   double _trueProjectCeiling =
       0.0; // Static ceiling - does not change based on user input
-  double _depositoryBalance = 0.0; // Depository balance for validation
   bool _isLoadingBudget = true;
 
   @override
@@ -72,31 +70,18 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       final allocatedBudget = project.budget ?? 0.0;
 
       final taskService = TaskService();
-      await taskService.fetchProjectTasks(widget.projectId);
-
-      double existingTasksExpenses =
-          0.0; // TODO: Update with new financial model
-
-      // Fetch depository balance from FinancialViewModel
-      final financialVM = context.read<FinancialViewModel>();
-      final orgService = OrganizationService();
-      final organizations = await orgService.getOrganizations();
-      double openingBudget = 0.0;
-      if (organizations.isNotEmpty) {
-        final currentOrg = organizations.firstWhere(
-          (org) => org.id == widget.organizationId,
-          orElse: () => organizations.first,
-        );
-        openingBudget = currentOrg.budget ?? 0.0;
-      }
-      final depositoryBalance =
-          financialVM.calculateAvailableBalance(openingBudget);
+      final projectTasks =
+          await taskService.fetchProjectTasks(widget.projectId);
+      final existingTasksExpenses = projectTasks
+          .where((task) =>
+              task.deductFromBudget == true && (task.estimatedExpense ?? 0) > 0)
+          .fold<double>(0.0, (sum, task) => sum + (task.estimatedExpense ?? 0));
 
       if (mounted) {
         setState(() {
           _projectBudget = allocatedBudget;
-          _trueProjectCeiling = allocatedBudget - existingTasksExpenses;
-          _depositoryBalance = depositoryBalance;
+          _trueProjectCeiling = (allocatedBudget - existingTasksExpenses)
+              .clamp(0.0, allocatedBudget);
           _isLoadingBudget = false;
         });
       }
@@ -183,21 +168,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
           SnackBar(
             content: Text(
               'INSUFFICIENT PROJECT BUDGET: You only have ₱${fixedProjectCeiling.toStringAsFixed(2)} left.',
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return; // THIS KILLS THE FUNCTION. DO NOT PROCEED TO SAVE.
-    }
-
-    // Check 2: Block save if depository balance is exceeded
-    if (_deductFromBudget && userInput > _depositoryBalance) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'INSUFFICIENT DEPOSITORY BALANCE: Available in depository is only ₱${_depositoryBalance.toStringAsFixed(2)}.',
             ),
             backgroundColor: Colors.red,
           ),
@@ -836,7 +806,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   }
 
   Widget _buildBudgetAlert() {
-    // Display the project budget and depository balance
+    // Display the project budget for task validation context
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
@@ -865,7 +835,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Depository Available: ₱${_depositoryBalance.toStringAsFixed(2)}",
+                  "Task expense validation is based on remaining project budget only.",
                   style: GoogleFonts.inter(
                     color: const Color(0xFF137FEC).withValues(alpha: 0.7),
                     fontSize: 12,

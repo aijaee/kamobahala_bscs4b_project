@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/project.dart';
+import 'financial_service.dart';
 
 class ProjectService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -48,7 +49,13 @@ class ProjectService {
     double budget,
     String occurredAt, {
     bool isBudgetAdjustment = false,
+    String transactionType = 'expense',
   }) async {
+    final normalizedAmount = budget.abs();
+    if (normalizedAmount <= 0) {
+      return;
+    }
+
     final transactionData = {
       'organization_id': organizationId,
       'title': isBudgetAdjustment
@@ -58,8 +65,8 @@ class ProjectService {
           ? 'Budget adjustment for project'
           : 'Budget allocated for project',
       'department': 'Projects',
-      'transaction_type': 'expense',
-      'amount': budget,
+      'transaction_type': transactionType,
+      'amount': normalizedAmount,
       'occurred_at': occurredAt,
       'created_at': DateTime.now().toIso8601String(),
     };
@@ -96,8 +103,12 @@ class ProjectService {
       String projectId, Map<String, dynamic> updates) async {
     // Fetch old project to check for budget changes
     final oldProject = await fetchProject(projectId);
+    final oldStatus = oldProject.status?.toLowerCase();
     final oldBudget = oldProject.budget ?? 0;
-    final newBudget = (updates['budget'] as num?)?.toDouble() ?? oldBudget;
+    final rawBudget = updates['budget'];
+    final newBudget = rawBudget is num
+      ? rawBudget.toDouble()
+      : double.tryParse(rawBudget?.toString() ?? '') ?? oldBudget;
 
     final response = await _client
         .from('projects')
@@ -107,20 +118,94 @@ class ProjectService {
         .single();
 
     final updatedProject = Project.fromMap(response);
+    final newStatus = updatedProject.status?.toLowerCase();
 
-    // Handle budget changes
-    if (newBudget != oldBudget && newBudget > 0) {
+    // Handle budget changes using delta only.
+    // Increase in project budget reduces depository (expense), decrease refunds it (income).
+    final budgetDelta = newBudget - oldBudget;
+    if (budgetDelta != 0) {
       await _createBudgetAllocationTransaction(
         oldProject.organizationId,
         projectId,
         updates['name'] ?? oldProject.name,
-        newBudget,
+        budgetDelta,
         DateTime.now().toIso8601String(),
-        isBudgetAdjustment: newBudget > oldBudget,
+        isBudgetAdjustment: true,
+        transactionType: budgetDelta > 0 ? 'expense' : 'income',
       );
     }
 
+    if (oldStatus != 'completed' && newStatus == 'completed') {
+      await _syncTaskTransactionsForCompletedProject(updatedProject);
+    } else if (oldStatus == 'completed' && newStatus != 'completed') {
+      await _deleteProjectTaskTransactions(projectId);
+    }
+
     return updatedProject;
+  }
+
+  Future<void> _syncTaskTransactionsForCompletedProject(Project project) async {
+    try {
+      await _deleteProjectTaskTransactions(project.id);
+
+      final tasksResponse = await _client
+          .from('tasks')
+          .select('id,title,estimated_expense,deduct_from_budget')
+          .eq('project_id', project.id);
+
+      final tasks = (tasksResponse as List)
+          .map((row) => row as Map<String, dynamic>)
+          .toList();
+
+      final now = DateTime.now().toIso8601String();
+      final financialService = FinancialService();
+
+      for (final task in tasks) {
+        final amount = (task['estimated_expense'] as num?)?.toDouble() ?? 0.0;
+        if (amount <= 0) {
+          continue;
+        }
+
+        final taskId = task['id']?.toString() ?? '';
+        if (taskId.isEmpty) {
+          continue;
+        }
+
+        final taskTitle = (task['title'] as String?)?.trim();
+        final title = (taskTitle == null || taskTitle.isEmpty) ? 'Task' : taskTitle;
+        final deductFromBudget = task['deduct_from_budget'] as bool? ?? false;
+
+        await financialService.createTransaction(
+          project.organizationId,
+          {
+            'title': 'Task: $title',
+            'description': deductFromBudget
+                ? 'Expense for task: $title (Project: ${project.name})'
+                : 'Income for task: $title (Project: ${project.name})',
+            'department': 'Tasks',
+            'transaction_type': deductFromBudget ? 'expense' : 'income',
+            'amount': amount,
+            'occurred_at': now,
+            'task_id': taskId,
+            'project_id': project.id,
+          },
+        );
+      }
+    } catch (e) {
+      print('Error syncing completed project task transactions: $e');
+    }
+  }
+
+  Future<void> _deleteProjectTaskTransactions(String projectId) async {
+    try {
+      await _client
+          .from('financial_transactions')
+          .delete()
+          .eq('project_id', projectId)
+          .not('task_id', 'is', null);
+    } catch (e) {
+      print('Error deleting project task transactions: $e');
+    }
   }
 
   /// Deletes a project

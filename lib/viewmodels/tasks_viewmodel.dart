@@ -59,7 +59,8 @@ class TasksViewModel extends ChangeNotifier {
       _tasks.add(newTask);
 
       // Refresh grouped tasks
-      _tasksByCategory = await _taskService.fetchTasksByCategory(_currentProjectId!);
+      _tasksByCategory =
+          await _taskService.fetchTasksByCategory(_currentProjectId!);
 
       _setLoading(false);
       notifyListeners();
@@ -78,16 +79,10 @@ class TasksViewModel extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      final updated = await _taskService.updateTask(taskId, updates);
+      await _taskService.updateTask(taskId, updates);
 
-      // Update local task list
-      final index = _tasks.indexWhere((task) => task.id == taskId);
-      if (index != -1) {
-        _tasks[index] = updated;
-      }
-
-      // Refresh grouped tasks
       if (_currentProjectId != null) {
+        _tasks = await _taskService.fetchProjectTasks(_currentProjectId!);
         _tasksByCategory =
             await _taskService.fetchTasksByCategory(_currentProjectId!);
       }
@@ -110,7 +105,7 @@ class TasksViewModel extends ChangeNotifier {
 
     try {
       final success = await _taskService.deleteTask(taskId);
-      
+
       if (!success) {
         throw Exception('Failed to delete task from database');
       }

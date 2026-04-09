@@ -1,6 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/task.dart';
-import 'financial_service.dart';
 
 class TaskService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -37,12 +36,7 @@ class TaskService {
       'created_at': DateTime.now().toIso8601String()
     };
     final response = await _client.from('tasks').insert(data).select().single();
-
-    final task = Task.fromMap(response);
-
-    await _syncTaskFinancialTransaction(task.id, taskData);
-
-    return task;
+    return Task.fromMap(response);
   }
 
   Future<Task> updateTask(String taskId, Map<String, dynamic> updates) async {
@@ -52,73 +46,7 @@ class TaskService {
         .eq('id', taskId)
         .select()
         .single();
-
-    final task = Task.fromMap(response);
-
-    await _syncTaskFinancialTransaction(taskId, response);
-
-    return task;
-  }
-
-  Future<void> _syncTaskFinancialTransaction(
-    String taskId,
-    Map<String, dynamic> taskData,
-  ) async {
-    final organizationId = taskData['organization_id'] as String?;
-    final projectId = taskData['project_id'] as String?;
-    final estimatedExpense =
-        (taskData['estimated_expense'] as num?)?.toDouble() ?? 0.0;
-
-    try {
-      await _client
-          .from('financial_transactions')
-          .delete()
-          .eq('task_id', taskId);
-
-      if (organizationId == null || estimatedExpense <= 0) {
-        return;
-      }
-
-      final deductFromBudget = taskData['deduct_from_budget'] as bool? ?? false;
-      final taskTitle = taskData['title'] as String? ?? 'Task';
-      final projectName = await _getProjectName(projectId);
-
-      final financialService = FinancialService();
-      await financialService.createTransaction(
-        organizationId,
-        {
-          'title': 'Task: $taskTitle',
-          'description': deductFromBudget
-              ? 'Expense for task: $taskTitle (Project: $projectName)'
-              : 'Income for task: $taskTitle (Project: $projectName)',
-          'department': 'Tasks',
-          'transaction_type': deductFromBudget ? 'expense' : 'income',
-          'amount': estimatedExpense,
-          'occurred_at': DateTime.now().toIso8601String(),
-          'task_id': taskId,
-          'project_id': projectId,
-        },
-      );
-    } catch (e) {
-      print('Error syncing financial transaction for task: $e');
-    }
-  }
-
-  Future<String> _getProjectName(String? projectId) async {
-    if (projectId == null || projectId.isEmpty) {
-      return 'Unknown Project';
-    }
-
-    try {
-      final response = await _client
-          .from('projects')
-          .select('name')
-          .eq('id', projectId)
-          .maybeSingle();
-      return (response?['name'] as String?) ?? 'Unknown Project';
-    } catch (_) {
-      return 'Unknown Project';
-    }
+    return Task.fromMap(response);
   }
 
   Future<bool> deleteTask(String taskId) async {
