@@ -448,10 +448,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showSwitchOrganizationDialog(
-      BuildContext context, ProfileViewModel viewModel) {
+      BuildContext screenContext, ProfileViewModel viewModel) {
     showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+      context: screenContext,
+      builder: (dialogContext) => AlertDialog(
         title: Text(
           'Switch Organization',
           style: GoogleFonts.poppins(
@@ -483,13 +483,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onPressed: isCurrentOrg
                         ? null
                         : () async {
-                            Navigator.pop(context); // Close the dialog
+                            Navigator.pop(dialogContext); // Close the dialog
                             final success = await viewModel
                                 .switchOrganization(org.id);
                             if (success && mounted) {
                               // Replace MainNavigationWrapper with new organization
-                              Navigator.pushReplacement(
-                                context,
+                              // Use screenContext for navigation, not dialogContext
+                              Navigator.of(screenContext).pushReplacement(
                                 MaterialPageRoute(
                                   builder: (_) => MainNavigationWrapper(
                                     organization: org.toMap(),
@@ -514,7 +514,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
         ],
@@ -523,10 +523,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _showLogoutConfirmation(
-      BuildContext context, ProfileViewModel viewModel) {
+      BuildContext screenContext, ProfileViewModel viewModel) {
     showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
+      context: screenContext,
+      builder: (dialogContext) => AlertDialog(
         title: Text(
           'Logout',
           style: GoogleFonts.poppins(
@@ -539,15 +539,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               final success = await viewModel.logout();
               if (success && mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
+                Navigator.of(screenContext).pushAndRemoveUntil(
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
                   (route) => false,
                 );
