@@ -8,16 +8,20 @@ import '../../core/services/organization_service.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/dashboard_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'financial_ledger.dart';
+import '../../models/project.dart';
 import 'tasks_by_category_screen.dart';
 import 'search_results_screen.dart';
-import '../projects/projects_list.dart';
 import '../projects/project_overview.dart';
 import '../projects/task_details.dart';
 
 class OrganizationDashboard extends StatefulWidget {
   final Map<String, dynamic> organization;
-  const OrganizationDashboard({super.key, required this.organization});
+  final Function(int)? onTabChange;
+  const OrganizationDashboard({
+    super.key,
+    required this.organization,
+    this.onTabChange,
+  });
 
   @override
   State<OrganizationDashboard> createState() => _OrganizationDashboardState();
@@ -25,7 +29,6 @@ class OrganizationDashboard extends StatefulWidget {
 
 class _OrganizationDashboardState extends State<OrganizationDashboard>
     with WidgetsBindingObserver {
-  // track bottom nav selection
   int currentIndex = 0;
   late FinancialViewModel _financialViewModel;
   late OrganizationDashboardViewModel _dashboardViewModel;
@@ -42,20 +45,17 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    
-    // Initialize view models immediately with default values
+
     _financialViewModel = FinancialViewModel();
     _dashboardViewModel = OrganizationDashboardViewModel(
       financialViewModel: _financialViewModel,
     );
     _financialViewModel.addListener(_onViewModelChanged);
     _dashboardViewModel.addListener(_onViewModelChanged);
-    
-    // Get admin status and user email, then load data
+
     _getUserEmail();
     _checkAdminStatus();
-    
-    // Load data after first frame
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _loadBalance();
@@ -66,7 +66,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   @override
   void didUpdateWidget(OrganizationDashboard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // If the organization changed, reinitialize and reload data
     if (oldWidget.organization['id'] != widget.organization['id']) {
       _cleanupViewModels();
       _initializeViewModels();
@@ -77,7 +76,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Refresh projects when app resumes (e.g., returning from task list)
       _refreshProjects();
       _loadBalance();
     }
@@ -98,8 +96,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     );
     _financialViewModel.addListener(_onViewModelChanged);
     _dashboardViewModel.addListener(_onViewModelChanged);
-    
-    // Defer loading balance to after frame
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _loadBalance();
@@ -119,7 +116,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   }
 
   Future<void> _checkAdminStatus() async {
-    final isAdmin = await _adminService.isUserAdmin(widget.organization['id'].toString());
+    final isAdmin = await _adminService
+        .isUserAdmin(widget.organization['id'].toString());
     if (mounted) {
       setState(() => _isAdmin = isAdmin);
     }
@@ -132,7 +130,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     }
   }
 
-  /// Loads balance using ViewModel
   Future<void> _loadBalance() async {
     await _financialViewModel
         .fetchTransactions(widget.organization['id'].toString());
@@ -140,8 +137,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       widget.organization,
       _financialViewModel.transactions,
     );
-    
-    // Fetch priority deadlines based on user role
+
     if (_isAdmin) {
       await _dashboardViewModel.fetchAdminDeadlines(
         widget.organization['id'].toString(),
@@ -153,12 +149,11 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
         _userEmail,
       );
     }
-    
-    // Sync member names from profiles to ensure they're populated
-    await _orgService.syncMemberNamesFromProfiles(widget.organization['id'].toString());
+
+    await _orgService
+        .syncMemberNamesFromProfiles(widget.organization['id'].toString());
   }
 
-  /// Refreshes projects for the current organization
   void _refreshProjects() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -170,7 +165,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   }
 
   Future<void> _refreshDashboard() async {
-    // Refresh projects, balance, and deadlines
     await context.read<ProjectsViewModel>().fetchProjectsWithProgress(
           widget.organization['id'].toString(),
         );
@@ -181,29 +175,22 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     final query = _searchController.text.trim();
     if (query.isEmpty) return;
 
-    // Get all tasks
     final allTasks = _dashboardViewModel.priorityDeadlines;
-    
-    // Get all projects from the ProjectsViewModel
     final projectsViewModel = context.read<ProjectsViewModel>();
     final allProjects = projectsViewModel.projects;
-    
-    // Get all transactions
     final allTransactions = _financialViewModel.transactions;
 
-    // Navigate to search results
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => SearchResultsScreen(
           query: query,
           tasks: allTasks,
-          projects: allProjects,
-          transactions: allTransactions,
+          projects: allProjects.map((p) => p.toMap()).toList(),
+          transactions: allTransactions.map((t) => t.toMap()).toList(),
         ),
       ),
     ).then((result) {
-      // Refresh dashboard data when returning from search results
       if (result == true && mounted) {
         _loadBalance();
       }
@@ -222,16 +209,16 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     final queryLower = query.toLowerCase();
     final suggestions = <Map<String, dynamic>>[];
 
-    // Get all tasks, projects, and transactions
     final allTasks = _dashboardViewModel.priorityDeadlines;
     final projectsViewModel = context.read<ProjectsViewModel>();
     final allProjects = projectsViewModel.projects;
     final allTransactions = _financialViewModel.transactions;
 
-    // Add matching tasks (max 3)
     final matchingTasks = allTasks
-        .where((task) =>
-            (task['title'] ?? '').toString().toLowerCase().contains(queryLower))
+        .where((task) => (task['title'] ?? '')
+            .toString()
+            .toLowerCase()
+            .contains(queryLower))
         .take(3)
         .toList();
 
@@ -245,40 +232,41 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       });
     }
 
-    // Add matching projects (max 3)
     final matchingProjects = allProjects
-        .where((project) =>
-            (project['name'] ?? '').toString().toLowerCase().contains(queryLower))
+        .where((project) => project.name
+            .toLowerCase()
+            .contains(queryLower))
         .take(3)
         .toList();
 
     for (var project in matchingProjects) {
-      // Count tasks for this project
-      final projectId = project['id'];
-      final taskCount = allTasks.where((task) => task['project_id'] == projectId).length;
-      
+      final projectId = project.id;
+      final taskCount =
+          allTasks.where((task) => task['project_id'] == projectId).length;
+
       suggestions.add({
         'type': 'project',
-        'title': project['name'] ?? 'Untitled Project',
+        'title': project.name,
         'subtitle': '$taskCount task${taskCount != 1 ? 's' : ''}',
         'icon': Icons.folder_outlined,
         'data': project,
       });
     }
 
-    // Add matching transactions (max 2)
     final matchingTransactions = allTransactions
         .where((transaction) =>
-            (transaction['title'] ?? '').toString().toLowerCase().contains(queryLower) ||
-            (transaction['category'] ?? '').toString().toLowerCase().contains(queryLower))
+            transaction.title
+                .toLowerCase()
+                .contains(queryLower))
         .take(2)
         .toList();
 
     for (var transaction in matchingTransactions) {
       suggestions.add({
         'type': 'transaction',
-        'title': transaction['title'] ?? 'Transaction',
-        'subtitle': '₱${(transaction['amount'] ?? 0.0).toStringAsFixed(2)}',
+        'title': transaction.title,
+        'subtitle':
+            '₱${transaction.amount.toStringAsFixed(2)}',
         'icon': Icons.account_balance_wallet_outlined,
         'data': transaction,
       });
@@ -315,83 +303,61 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
           builder: (_) => ProjectOverviewScreen(
             project: data,
             organization: widget.organization,
+            onTabChange: widget.onTabChange,
           ),
         ),
       );
     } else if (type == 'transaction') {
-      // Navigate to financial ledger
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => FinancialLedgerScreen(organization: widget.organization),
-        ),
-      );
+      // Switch to Finances tab using the callback
+      widget.onTabChange?.call(2);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F8),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            RefreshIndicator(
-              onRefresh: _refreshDashboard,
-              color: const Color(0xFF137FEC),
-              backgroundColor: Colors.white,
-              child: CustomScrollView(
-                slivers: [
-                  _buildHeader(),
-                  SliverPadding(
-                    padding: const EdgeInsets.all(16.0),
-                    sliver: SliverList(
-                      delegate: SliverChildListDelegate([
-                        _buildFinancialCard(context),
-                        const SizedBox(height: 24),
-                        _buildSectionHeader(
-                          _isAdmin ? "Priority Overview" : "Tasks Assigned",
-                          "View All",
-                          onPressed: () {
-                            _showAllTasksModal(context);
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        _buildDeadlinesList(context),
-                        const SizedBox(height: 24),
-
-                        _buildSectionHeader(
-                          "Active Projects",
-                          "See All",
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => ProjectsList(
-                                  initialIndex: 1,
-                                  organization: widget.organization,
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        _buildProjectsListFromViewModel(context),
-                        const SizedBox(height: 100),
-                      ]),
-                    ),
+    return SafeArea(
+      child: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _refreshDashboard,
+            color: const Color(0xFF137FEC),
+            backgroundColor: Colors.white,
+            child: CustomScrollView(
+              slivers: [
+                _buildHeader(),
+                SliverPadding(
+                  padding: const EdgeInsets.all(16.0),
+                  sliver: SliverList(
+                    delegate: SliverChildListDelegate([
+                      _buildFinancialCard(context),
+                      const SizedBox(height: 24),
+                      _buildSectionHeader(
+                        _isAdmin ? "Priority Overview" : "Tasks Assigned",
+                        "View All",
+                        onPressed: () {
+                          _showAllTasksModal(context);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _buildDeadlinesList(context),
+                      const SizedBox(height: 24),
+                      _buildSectionHeader(
+                        "Active Projects",
+                        "See All",
+                        onPressed: () {
+                          widget.onTabChange?.call(1);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      _buildProjectsListFromViewModel(context),
+                      const SizedBox(height: 100),
+                    ]),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: _buildBottomNav(),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -411,12 +377,17 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                     alignment: Alignment.centerLeft,
                     child: Text(
                       widget.organization['name'] ?? 'Organization',
-                      style: GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.bold, color: const Color(0xFF111418)),
+                      style: GoogleFonts.inter(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF111418),
+                      ),
                     ),
                   ),
                 ),
                 TextButton.icon(
-                  icon: const Icon(Icons.arrow_back, size: 24, color: Colors.blue),
+                  icon: const Icon(Icons.arrow_back,
+                      size: 24, color: Colors.blue),
                   label: const Text(
                     'Back to main',
                     style: TextStyle(color: Colors.blue),
@@ -450,9 +421,14 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                           )
                         : null,
                     filled: true,
-                    fillColor: const Color(0xFFE5E7EB).withOpacity(0.5),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    fillColor:
+                        const Color(0xFFE5E7EB).withOpacity(0.5),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
                 // Suggestions dropdown
@@ -485,13 +461,15 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                         return GestureDetector(
                           onTap: () => _handleSuggestionTap(suggestion),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
                             child: Row(
                               children: [
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF137FEC).withOpacity(0.1),
+                                    color: const Color(0xFF137FEC)
+                                        .withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Icon(
@@ -503,7 +481,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         title,
@@ -556,7 +535,11 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
         color: const Color(0xFF137FEC),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: const Color(0xFF137FEC).withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 10))
+          BoxShadow(
+            color: const Color(0xFF137FEC).withOpacity(0.2),
+            blurRadius: 15,
+            offset: const Offset(0, 10),
+          ),
         ],
       ),
       child: Column(
@@ -607,9 +590,10 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
             ],
           ),
           const SizedBox(height: 8),
-          // Bind balance from ViewModel
           Text(
-            _balanceHidden ? "••••••••" : _formatCurrency(_dashboardViewModel.currentBalance),
+            _balanceHidden
+                ? "••••••••"
+                : _formatCurrency(_dashboardViewModel.currentBalance),
             style: GoogleFonts.inter(
               color: Colors.white,
               fontSize: 30,
@@ -619,13 +603,15 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
           const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => FinancialLedgerScreen(organization: widget.organization)));
+              // Switch to Finances tab using the callback
+              widget.onTabChange?.call(2);
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: const Color(0xFF137FEC),
               minimumSize: const Size(double.infinity, 44),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               elevation: 0,
             ),
             child: const Text("View Financial Details"),
@@ -649,12 +635,19 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     return '${amount < 0 ? '-₱' : '₱'}${buffer.toString()}.$decimals';
   }
 
-  Widget _buildSectionHeader(String title, String actionText, {VoidCallback? onPressed}) {
+  Widget _buildSectionHeader(String title, String actionText,
+      {VoidCallback? onPressed}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.bold)),
-        TextButton(onPressed: onPressed, child: Text(actionText, style: const TextStyle(color: Color(0xFF137FEC)))),
+        Text(title,
+            style: GoogleFonts.inter(
+                fontSize: 18, fontWeight: FontWeight.bold)),
+        TextButton(
+          onPressed: onPressed,
+          child: Text(actionText,
+              style: const TextStyle(color: Color(0xFF137FEC))),
+        ),
       ],
     );
   }
@@ -668,10 +661,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     }
 
     if (_isAdmin) {
-      // Admin view: show priority summary cards
       return _buildAdminPriorityCards(context);
     } else {
-      // Member view: show member-specific priority cards
       return _buildMemberPriorityCards(context);
     }
   }
@@ -680,14 +671,15 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     final allTasks = _dashboardViewModel.priorityDeadlines;
     final assignedTasks = _dashboardViewModel.assignedDeadlines;
 
-    // Count tasks by priority
-    final highCount =
-        allTasks.where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'high').length;
+    final highCount = allTasks
+        .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'high')
+        .length;
     final mediumCount = allTasks
         .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'medium')
         .length;
-    final lowCount =
-        allTasks.where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'low').length;
+    final lowCount = allTasks
+        .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'low')
+        .length;
 
     final cards = [
       {
@@ -702,7 +694,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
         'count': mediumCount,
         'color': 0xFFF97316,
         'icon': Icons.warning,
-        'subtitle': '$mediumCount task${mediumCount != 1 ? 's' : ''} in progress',
+        'subtitle':
+            '$mediumCount task${mediumCount != 1 ? 's' : ''} in progress',
       },
       {
         'title': 'Low Priority',
@@ -738,16 +731,24 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
 
         return GestureDetector(
           onTap: () {
-            // Filter tasks based on card type
             List<Map<String, dynamic>> filteredTasks;
-            
+
             if (cardTitle == 'High Priority') {
-              filteredTasks = allTasks.where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'high').toList();
+              filteredTasks = allTasks
+                  .where((t) =>
+                      (t['priority'] ?? 'Low').toLowerCase() == 'high')
+                  .toList();
             } else if (cardTitle == 'Medium Priority') {
-              filteredTasks = allTasks.where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'medium').toList();
+              filteredTasks = allTasks
+                  .where((t) =>
+                      (t['priority'] ?? 'Low').toLowerCase() == 'medium')
+                  .toList();
             } else if (cardTitle == 'Low Priority') {
-              filteredTasks = allTasks.where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'low').toList();
-            } else { // My Tasks
+              filteredTasks = allTasks
+                  .where(
+                      (t) => (t['priority'] ?? 'Low').toLowerCase() == 'low')
+                  .toList();
+            } else {
               filteredTasks = assignedTasks;
             }
 
@@ -839,8 +840,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
 
   Widget _buildMemberPriorityCards(BuildContext context) {
     final allAssignedTasks = _dashboardViewModel.priorityDeadlines;
-    
-    // Count member's tasks by priority
+
     final highCount = allAssignedTasks
         .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'high')
         .length;
@@ -850,15 +850,15 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     final lowCount = allAssignedTasks
         .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'low')
         .length;
-    
-    // Count overdue tasks (status = 'pending' and dueDate is in the past)
+
     final now = DateTime.now();
     final overdueTasks = allAssignedTasks.where((t) {
       final dueDateStr = t['due_date'];
       if (dueDateStr == null || dueDateStr.isEmpty) return false;
       try {
         final dueDate = DateTime.parse(dueDateStr);
-        return dueDate.isBefore(now) && (t['status'] ?? '').toLowerCase() != 'completed';
+        return dueDate.isBefore(now) &&
+            (t['status'] ?? '').toLowerCase() != 'completed';
       } catch (e) {
         return false;
       }
@@ -877,7 +877,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
         'count': mediumCount,
         'color': 0xFFF97316,
         'icon': Icons.warning,
-        'subtitle': '$mediumCount task${mediumCount != 1 ? 's' : ''} assigned',
+        'subtitle':
+            '$mediumCount task${mediumCount != 1 ? 's' : ''} assigned',
       },
       {
         'title': 'Low Priority',
@@ -913,22 +914,24 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
 
         return GestureDetector(
           onTap: () {
-            // Filter tasks based on card type
             List<Map<String, dynamic>> filteredTasks;
-            
+
             if (cardTitle == 'High Priority') {
               filteredTasks = allAssignedTasks
-                  .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'high')
+                  .where((t) =>
+                      (t['priority'] ?? 'Low').toLowerCase() == 'high')
                   .toList();
             } else if (cardTitle == 'Medium Priority') {
               filteredTasks = allAssignedTasks
-                  .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'medium')
+                  .where((t) =>
+                      (t['priority'] ?? 'Low').toLowerCase() == 'medium')
                   .toList();
             } else if (cardTitle == 'Low Priority') {
               filteredTasks = allAssignedTasks
-                  .where((t) => (t['priority'] ?? 'Low').toLowerCase() == 'low')
+                  .where((t) =>
+                      (t['priority'] ?? 'Low').toLowerCase() == 'low')
                   .toList();
-            } else { // Overdue Tasks
+            } else {
               filteredTasks = overdueTasks;
             }
 
@@ -1018,7 +1021,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     );
   }
 
-
   String _formatDate(String? dateString) {
     if (dateString == null) return '';
     try {
@@ -1043,9 +1045,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   }
 
   Future<void> _showAllTasksModal(BuildContext context) {
-    final tasks = _isAdmin
-        ? _dashboardViewModel.priorityDeadlines
-        : _dashboardViewModel.priorityDeadlines;
+    final tasks = _dashboardViewModel.priorityDeadlines;
 
     return showModalBottomSheet(
       context: context,
@@ -1102,7 +1102,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                     )
                   : Column(
                       children: [
-                        // Legend Header
                         Container(
                           color: Colors.white,
                           padding: const EdgeInsets.all(16),
@@ -1123,25 +1122,28 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                 children: [
                                   _buildLegendItem(
                                     "High",
-                                    Color(DashboardService.getPriorityInfo('High')['color'] as int),
+                                    Color(DashboardService.getPriorityInfo(
+                                        'High')['color'] as int),
                                   ),
                                   const SizedBox(width: 16),
                                   _buildLegendItem(
                                     "Medium",
-                                    Color(DashboardService.getPriorityInfo('Medium')['color'] as int),
+                                    Color(DashboardService.getPriorityInfo(
+                                        'Medium')['color'] as int),
                                   ),
                                   const SizedBox(width: 16),
                                   _buildLegendItem(
                                     "Low",
-                                    Color(DashboardService.getPriorityInfo('Low')['color'] as int),
+                                    Color(DashboardService.getPriorityInfo(
+                                        'Low')['color'] as int),
                                   ),
                                 ],
                               ),
                             ],
                           ),
                         ),
-                        const Divider(height: 1, color: Color(0xFFF3F4F6)),
-                        // Task List
+                        const Divider(
+                            height: 1, color: Color(0xFFF3F4F6)),
                         Expanded(
                           child: ListView.builder(
                             controller: scrollController,
@@ -1162,7 +1164,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                     Navigator.push(
                                       context,
                                       MaterialPageRoute(
-                                        builder: (context) => TaskDetailsScreen(task: task),
+                                        builder: (context) =>
+                                            TaskDetailsScreen(task: task),
                                       ),
                                     ).then((taskUpdated) {
                                       if (taskUpdated == true && mounted) {
@@ -1184,7 +1187,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                         ),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: urgencyColor.withOpacity(0.08),
+                                            color: urgencyColor
+                                                .withOpacity(0.08),
                                             blurRadius: 8,
                                             offset: const Offset(0, 2),
                                           ),
@@ -1199,12 +1203,14 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Container(
-                                                padding: const EdgeInsets.all(6),
+                                                padding:
+                                                    const EdgeInsets.all(6),
                                                 decoration: BoxDecoration(
                                                   color: urgencyColor
                                                       .withOpacity(0.1),
                                                   borderRadius:
-                                                      BorderRadius.circular(6),
+                                                      BorderRadius.circular(
+                                                          6),
                                                 ),
                                                 child: Icon(
                                                   Icons.priority_high,
@@ -1216,12 +1222,14 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                               Expanded(
                                                 child: Column(
                                                   crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
+                                                      CrossAxisAlignment
+                                                          .start,
                                                   children: [
                                                     Text(
                                                       task['title'] ??
                                                           'Untitled Task',
-                                                      style: GoogleFonts.inter(
+                                                      style:
+                                                          GoogleFonts.inter(
                                                         fontSize: 14,
                                                         fontWeight:
                                                             FontWeight.w600,
@@ -1229,16 +1237,18 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                                             0xFF111418),
                                                       ),
                                                       maxLines: 2,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
+                                                      overflow: TextOverflow
+                                                          .ellipsis,
                                                     ),
                                                     const SizedBox(height: 4),
                                                     Text(
                                                       task['projectName'] ??
                                                           'No Project',
-                                                      style: GoogleFonts.inter(
+                                                      style:
+                                                          GoogleFonts.inter(
                                                         fontSize: 12,
-                                                        color: Colors.grey[600],
+                                                        color:
+                                                            Colors.grey[600],
                                                       ),
                                                     ),
                                                   ],
@@ -1249,10 +1259,12 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                           const SizedBox(height: 12),
                                           Row(
                                             mainAxisAlignment:
-                                                MainAxisAlignment.spaceBetween,
+                                                MainAxisAlignment
+                                                    .spaceBetween,
                                             children: [
                                               Container(
-                                                padding: const EdgeInsets.symmetric(
+                                                padding: const EdgeInsets
+                                                    .symmetric(
                                                   horizontal: 8,
                                                   vertical: 4,
                                                 ),
@@ -1260,7 +1272,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                                   color: urgencyColor
                                                       .withOpacity(0.1),
                                                   borderRadius:
-                                                      BorderRadius.circular(6),
+                                                      BorderRadius.circular(
+                                                          6),
                                                 ),
                                                 child: Text(
                                                   priorityInfo['label']
@@ -1268,7 +1281,8 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                                                   style: GoogleFonts.inter(
                                                     fontSize: 11,
                                                     color: urgencyColor,
-                                                    fontWeight: FontWeight.w600,
+                                                    fontWeight:
+                                                        FontWeight.w600,
                                                   ),
                                                 ),
                                               ),
@@ -1325,11 +1339,9 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     );
   }
 
-  // TODO: [MVVM] move project list content into ViewModel and make this data-driven
   Widget _buildProjectsListFromViewModel(BuildContext context) {
     return Consumer<ProjectsViewModel>(
       builder: (context, projectsViewModel, _) {
-        // Initialize projects from ViewModel if not already loaded
         if (projectsViewModel.currentOrganizationId == null ||
             projectsViewModel.currentOrganizationId !=
                 widget.organization['id'].toString()) {
@@ -1362,16 +1374,15 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
             itemCount: projectsViewModel.projects.length,
             itemBuilder: (context, index) {
               final project = projectsViewModel.projects[index];
-              final progress = (project['progress'] as num?)?.toDouble() ?? 0.0;
-              
+              final progress = 0.0; // Progress calculated from tasks
+
               return Padding(
                 padding: EdgeInsets.only(
                   left: index == 0 ? 0 : 16,
-                  right: index == projectsViewModel.projects.length - 1 ? 0 : 0,
                 ),
                 child: _buildProjectCard(
-                  project['name'] ?? 'Untitled',
-                  project['description'] ?? 'No description',
+                  project.name,
+                  project.description ?? 'No description',
                   progress,
                   'In Progress',
                   const Color(0xFF137FEC),
@@ -1385,7 +1396,14 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     );
   }
 
-  Widget _buildProjectCard(String title, String sub, double progress, String days, Color color, {Map<String, dynamic>? project}) {
+  Widget _buildProjectCard(
+    String title,
+    String sub,
+    double progress,
+    String days,
+    Color color, {
+    Project? project,
+  }) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -1394,6 +1412,7 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
             builder: (context) => ProjectOverviewScreen(
               organization: widget.organization,
               project: project,
+              onTabChange: widget.onTabChange,
             ),
           ),
         );
@@ -1401,63 +1420,51 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       child: Container(
         width: 240,
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFFF3F4F6))),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFF3F4F6)),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
               padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Icon(Icons.rocket_launch, color: color, size: 20),
             ),
             const SizedBox(height: 12),
-            Text(title, style: GoogleFonts.inter(fontWeight: FontWeight.bold, fontSize: 14)),
-            Text(sub, style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
+            Text(title,
+                style: GoogleFonts.inter(
+                    fontWeight: FontWeight.bold, fontSize: 14)),
+            Text(sub,
+                style: GoogleFonts.inter(color: Colors.grey, fontSize: 12)),
             const Spacer(),
-            LinearProgressIndicator(value: progress, backgroundColor: const Color(0xFFF3F4F6), color: color, borderRadius: BorderRadius.circular(10)),
+            LinearProgressIndicator(
+              value: progress,
+              backgroundColor: const Color(0xFFF3F4F6),
+              color: color,
+              borderRadius: BorderRadius.circular(10),
+            ),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("${(progress * 100).toInt()}% Complete", style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                Text(days, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                Text(
+                  "${(progress * 100).toInt()}% Complete",
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                Text(
+                  days,
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
               ],
-            )
+            ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildBottomNav() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-      decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
-      child: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: (index) {
-          if (index == 1) {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProjectsList(initialIndex: 1, organization: widget.organization)));
-          } else if (index == 2) {
-            Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => FinancialLedgerScreen(initialIndex: 2, organization: widget.organization)));
-          } else {
-            setState(() { currentIndex = index; });
-          }
-        },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        selectedItemColor: const Color(0xFF137FEC),
-        unselectedItemColor: const Color(0xFF9CA3AF),
-        showUnselectedLabels: true,
-        selectedFontSize: 10,
-        unselectedFontSize: 10,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: "Dashboard"),
-          BottomNavigationBarItem(icon: Icon(Icons.assignment_outlined), label: "Projects"),
-          BottomNavigationBarItem(icon: Icon(Icons.account_balance_wallet_outlined), label: "Finances"),
-          BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: "Profile"),
-        ],
       ),
     );
   }

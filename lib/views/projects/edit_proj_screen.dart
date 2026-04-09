@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kamobahala_bscs4b_project/viewmodels/financial_viewmodel.dart';
-import 'projects_list.dart';
+import '../../models/project.dart';
 import '../../viewmodels/projects_viewmodel.dart';
 
 // ── Brand constants (shared with CreateOrganizationScreen) ───────────────────
@@ -48,17 +48,13 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     });
   }
 
-  void _initializeForm(Map<String, dynamic> project) {
-    nameController.text = project['name']?.toString() ?? '';
-    descriptionController.text = project['description']?.toString() ?? '';
-    budgetController.text = project['budget']?.toString() ?? '';
+  void _initializeForm(Project project) {
+    nameController.text = project.name;
+    descriptionController.text = project.description ?? '';
+    budgetController.text = project.budget?.toString() ?? '';
 
-    startDate = project['start_date'] is String
-        ? DateTime.tryParse(project['start_date'])
-        : project['start_date'] as DateTime?;
-    endDate = project['due_date'] is String
-        ? DateTime.tryParse(project['due_date'])
-        : project['due_date'] as DateTime?;
+    startDate = project.startDate;
+    endDate = project.endDate;
   }
 
   // ── Shared input decoration ─────────────────────────────────────────────────
@@ -189,12 +185,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.close, color: kRed),
-          onPressed: () => Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-                builder: (_) => ProjectsList(
-                    initialIndex: 1, organization: widget.organization)),
-          ),
+          onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           "Edit Project",
@@ -324,20 +315,31 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
 
     if (!_formKey.currentState!.validate()) return;
 
-    // Calculate the maximum allowable budget using the unified balance from FinancialViewModel
-    final globalAvailableBalance = _getAvailableBalance();
-    final existingProjectBudget =
-        (viewModel.currentProject?['budget'] as num).toDouble();
-    final maxAllowableBudget = globalAvailableBalance + existingProjectBudget;
+    // Get the new budget
     final newBudget = _toDouble(budgetController.text);
-
-    // Validate: prevent save if new budget exceeds available funds
-    if (newBudget > maxAllowableBudget) {
-      setState(() {
-        _validationError =
-            'Insufficient Funds! Available in Depository: ₱${globalAvailableBalance.toStringAsFixed(2)}';
-      });
-      return;
+    
+    // Get the existing budget (old budget before edit)
+    final existingProjectBudget = 
+        _toDouble((viewModel.currentProject?.budget ?? 0).toString());
+    
+    // Calculate the amount being added to the budget
+    final budgetIncrease = newBudget - existingProjectBudget;
+    
+    // If budget is being increased, validate against available balance
+    if (budgetIncrease > 0) {
+      final availableBalance = _getAvailableBalance();
+      
+      // If the increase is more than what's available, show error
+      if (budgetIncrease > availableBalance) {
+        final errorMessage = 
+            'INSUFFICIENT DEPOSITORY BALANCE: Available in depository is only ₱${availableBalance.toStringAsFixed(2)}. '
+            'You are trying to allocate ₱${budgetIncrease.toStringAsFixed(2)} more.';
+        
+        setState(() {
+          _validationError = errorMessage;
+        });
+        return;
+      }
     }
 
     final updates = {
@@ -355,12 +357,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Project updated successfully')),
       );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-            builder: (_) => ProjectsList(
-                initialIndex: 1, organization: widget.organization)),
-      );
+      Navigator.pop(context, true); // Pop with success flag to trigger refresh
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -410,12 +407,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                 if (success) {
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                       content: Text('Project deleted successfully')));
-                  Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => ProjectsList(
-                              initialIndex: 1,
-                              organization: widget.organization)));
+                  Navigator.pop(context, true); // Pop with success flag to trigger refresh
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(viewModel.errorMessage ??
@@ -505,7 +497,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     );
   }
 
-  Widget _buildBudgetCard(Map<String, dynamic>? project) {
+  Widget _buildBudgetCard(Project? project) {
     return Container(
       decoration: BoxDecoration(
           color: kCardBg,

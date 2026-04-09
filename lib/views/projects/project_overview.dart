@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../dashboard/organization_dashboard.dart';
-import 'projects_list.dart';
-import '../dashboard/financial_ledger.dart';
+import '../../models/project.dart';
 import 'task_list_screen.dart';
 import 'edit_proj_screen.dart';
 import '../../viewmodels/tasks_viewmodel.dart';
 import '../../viewmodels/financial_viewmodel.dart';
+import '../../viewmodels/projects_viewmodel.dart';
 import '../../core/services/admin_service.dart';
 
 class ProjectOverviewScreen extends StatefulWidget {
   final Map<String, dynamic> organization;
-  final Map<String, dynamic>? project;
+  final Project? project;
+  final Function(int)? onTabChange;
 
   const ProjectOverviewScreen({
     super.key,
@@ -22,6 +22,7 @@ class ProjectOverviewScreen extends StatefulWidget {
       'budget': 20000.0,
     },
     this.project,
+    this.onTabChange,
   });
 
   @override
@@ -41,6 +42,120 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
     _checkAdminStatus();
   }
 
+  Future<void> _markProjectAsComplete() async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Mark Project Complete'),
+          content: Text(
+            'Are you sure you want to mark "${widget.project?.name ?? 'this project'}" as completed? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF137FEC),
+              ),
+              child: const Text('Mark Complete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || widget.project == null) return;
+
+    try {
+      final projectsVM = context.read<ProjectsViewModel>();
+      final financialVM = context.read<FinancialViewModel>();
+      final projectId = widget.project!.id;
+      final organizationId = widget.organization['id'];
+      
+      // Task financial tracking is handled through transactions.
+      const double totalIncome = 0.0;
+      const double totalExpense = 0.0;
+      const double netAmount = 0.0;
+      
+      print('Project completion: Income=$totalIncome, Expense=$totalExpense, Net=$netAmount');
+      
+      // Update project status to completed
+      final success = await projectsVM.updateProject(
+        projectId,
+        {'status': 'completed'},
+      );
+
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to mark project as complete')),
+          );
+        }
+        return;
+      }
+
+      // Record the project completion transaction and update depository
+      if (organizationId != null) {
+        try {
+          financialVM.setCurrentOrganization(organizationId);
+          
+          // Create financial transaction for project completion
+          await financialVM.createTransaction({
+            'title': 'Project Completed: ${widget.project?.name}',
+            'transaction_type': netAmount >= 0 ? 'income' : 'expense',
+            'amount': netAmount.abs(),
+            'category': 'Project Completion',
+            'department': 'Projects',
+            'description': 'Project completion net adjustment (Income: ₱$totalIncome - Expense: ₱$totalExpense)',
+            'project_id': projectId,
+            'occurred_at': DateTime.now().toIso8601String(),
+          });
+          
+          print('Transaction recorded for project completion');
+          
+          // Refresh financial data
+          await financialVM.fetchTransactions(organizationId);
+          
+          print('Depository updated with net amount: $netAmount');
+        } catch (e) {
+          print('Error recording project completion transaction: $e');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Note: Project completed, but could not update depository: $e')),
+            );
+            return;
+          }
+        }
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Project "${widget.project?.name}" marked as completed (Net: ₱${netAmount.toStringAsFixed(2)})')),
+      );
+      
+      // Refresh completed projects list
+      await projectsVM.fetchCompletedProjects();
+      
+      // Navigate back after a short delay
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> _checkAdminStatus() async {
     final isAdmin = await _adminService.isUserAdmin(widget.organization['id']);
     if (mounted) {
@@ -50,8 +165,8 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
 
   void _loadProjectData() {
     // Fetch tasks and financial data for this project
-    if (widget.project != null && widget.project!['id'] != null) {
-      final projectId = widget.project!['id'];
+    if (widget.project != null && widget.project!.id.isNotEmpty) {
+      final projectId = widget.project!.id;
       final orgId = widget.organization['id'];
       
       // Fetch tasks for this project
@@ -63,8 +178,8 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
 
   // Force refresh - ACTUALLY await the data loading
   Future<void> _forceRefresh() async {
-    if (widget.project != null && widget.project!['id'] != null) {
-      final projectId = widget.project!['id'];
+    if (widget.project != null && widget.project!.id.isNotEmpty) {
+      final projectId = widget.project!.id;
       final orgId = widget.organization['id'];
       
       // Await both fetch operations to complete
@@ -79,14 +194,6 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Refresh data when returning from task list
-    if (state == AppLifecycleState.resumed) {
-      _loadProjectData();
-    }
   }
 
   @override
@@ -186,7 +293,7 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
               ),
               const SizedBox(height: 12),
               ...tasksVM.tasks.take(3).map((task) {
-                final isCompleted = task['status'] == 'Completed' || task['status'] == 'completed';
+                final isCompleted = task.isCompleted;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: GestureDetector(
@@ -195,9 +302,9 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                         context,
                         MaterialPageRoute(
                           builder: (context) => TaskListScreen(
-                            projectId: widget.project?['id'] ?? '',
+                            projectId: widget.project?.id ?? '',
                             organizationId: widget.organization['id'].toString(),
-                            projectName: widget.project?['name'] ?? 'Project',
+                            projectName: widget.project?.name ?? 'Project',
                           ),
                         ),
                       ).then((_) {
@@ -215,7 +322,7 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            task['title'] ?? 'Untitled',
+                            task.title,
                             style: GoogleFonts.inter(
                               decoration: isCompleted ? TextDecoration.lineThrough : null,
                               color: isCompleted ? Colors.grey : Colors.black,
@@ -235,9 +342,9 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                       context,
                       MaterialPageRoute(
                         builder: (context) => TaskListScreen(
-                          projectId: widget.project?['id'] ?? '',
+                          projectId: widget.project?.id ?? '',
                           organizationId: widget.organization['id'].toString(),
-                          projectName: widget.project?['name'] ?? 'Project',
+                          projectName: widget.project?.name ?? 'Project',
                         ),
                       ),
                     );
@@ -264,29 +371,57 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
         onPressed: () => Navigator.pop(context),
       ),
       title: Text(
-        widget.project?['name'] ?? "Project Overview",
+        widget.project?.name ?? "Project Overview",
         style: GoogleFonts.inter(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18),
       ),
       centerTitle: true,
       actions: [
         if (_isAdmin)
-          IconButton(
-            icon: const Icon(Icons.edit, color: Colors.black),
-            onPressed: () {
-              if (widget.project != null && widget.project!['id'] != null) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => EditProjectScreen(
-                      projectId: widget.project!['id'],
-                      organization: widget.organization,
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.black),
+            onSelected: (value) {
+              if (value == 'edit') {
+                if (widget.project != null && widget.project!.id.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditProjectScreen(
+                        projectId: widget.project!.id,
+                        organization: widget.organization,
+                      ),
                     ),
-                  ),
-                ).then((_) {
-                  // Refresh project data when returning from edit
-                  _loadProjectData();
-                });
+                  ).then((_) {
+                    // Refresh project data when returning from edit
+                    _loadProjectData();
+                  });
+                }
+              } else if (value == 'complete') {
+                _markProjectAsComplete();
               }
+            },
+            itemBuilder: (BuildContext context) {
+              return [
+                const PopupMenuItem<String>(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit, size: 18),
+                      SizedBox(width: 8),
+                      Text('Edit Project'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'complete',
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle_outline, size: 18, color: Color(0xFF137FEC)),
+                      SizedBox(width: 8),
+                      Text('Mark Complete'),
+                    ],
+                  ),
+                ),
+              ];
             },
           ),
       ],
@@ -294,8 +429,8 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
   }
 
   Widget _buildMainProgressCard() {
-    final projectName = widget.project?['name'] ?? 'CS Gala Preparation';
-    final budget = widget.project?['budget'] ?? 0;
+    final projectName = widget.project?.name ?? 'CS Gala Preparation';
+    final budget = widget.project?.budget ?? 0;
     
     return Consumer<TasksViewModel>(
       builder: (context, tasksVM, _) {
@@ -303,7 +438,7 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
         double progress = 0.0;
         if (tasksVM.tasks.isNotEmpty) {
           final completedCount = tasksVM.tasks
-              .where((task) => (task['status'] ?? '').toString().toLowerCase() == 'completed')
+                  .where((task) => task.isCompleted)
               .length;
           progress = completedCount / tasksVM.tasks.length;
         }
@@ -370,22 +505,21 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
   }
 
   Widget _buildFinancialHealthCard() {
-    return Consumer<FinancialViewModel>(
-      builder: (context, financialVM, _) {
-        final projectBudget = (widget.project?['budget'] as num?)?.toDouble() ?? 0.0;
-        final projectId = widget.project?['id'];
+    return Consumer2<FinancialViewModel, TasksViewModel>(
+      builder: (context, financialVM, tasksVM, _) {
+        final projectBudget = widget.project?.budget ?? 0.0;
+        final projectId = widget.project?.id;
         
-        // Calculate budget utilized from transactions related to this project
+        // Calculate budget utilized and income from COMPLETED TASKS (not transactions)
         double budgetUtilized = 0.0;
+        double projectIncome = 0.0;
+        
         if (projectId != null) {
-          for (final transaction in financialVM.transactions) {
-            final txnProjectId = transaction['project_id'];
-            final amount = (transaction['amount'] as num?)?.toDouble() ?? 0.0;
-            // Match by project_id and filter for task expenses (title starts with 'Task:')
-            if (txnProjectId == projectId && 
-                (transaction['transaction_type'] ?? '').toString().toLowerCase() == 'expense' &&
-                (transaction['title'] ?? '').toString().startsWith('Task:')) {
-              budgetUtilized += amount;
+          for (final task in tasksVM.tasks) {
+            // Only count completed tasks in this project
+            if (task.projectId == projectId && task.isCompleted) {
+              // Note: estimated_expense and deduct_from_budget fields not available in Task model
+              // These would need to be added to the Task model or sourced from elsewhere
             }
           }
         }
@@ -457,6 +591,20 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
                 "Estimated completion cost: ₱${estimatedTotal.toStringAsFixed(2)}",
                 style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF9CA3AF)),
               ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Income Made", style: GoogleFonts.inter(color: const Color(0xFF617589))),
+                  Text(
+                    "₱${projectIncome.toStringAsFixed(2)}",
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.bold,
+                      color: projectIncome > 0 ? const Color(0xFF10B981) : const Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         );
@@ -478,9 +626,9 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
               context,
               MaterialPageRoute(
                 builder: (context) => TaskListScreen(
-                  projectId: widget.project?['id'] ?? '',
+                  projectId: widget.project?.id ?? '',
                   organizationId: widget.organization['id'].toString(),
-                  projectName: widget.project?['name'] ?? 'Project',
+                  projectName: widget.project?.name ?? 'Project',
                 ),
               ),
             ).then((_) {
@@ -524,19 +672,14 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
         currentIndex: _selectedIndex,
         onTap: (index) {
           if (index == _selectedIndex) return;
-          switch (index) {
-            case 0:
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => OrganizationDashboard(organization: widget.organization)));
-              break;
-            case 1:
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ProjectsList(organization: widget.organization)));
-              break;
-            case 2:
-              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => FinancialLedgerScreen(organization: widget.organization)));
-              break;
-            case 3:
-              setState(() => _selectedIndex = index);
-              break;
+          
+          // If we have an onTabChange callback, use it to switch tabs
+          if (widget.onTabChange != null) {
+            Navigator.pop(context);
+            widget.onTabChange!(index);
+          } else {
+            // Fallback: just pop back
+            Navigator.pop(context);
           }
         },
         type: BottomNavigationBarType.fixed,

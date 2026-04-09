@@ -4,14 +4,18 @@ import 'package:provider/provider.dart';
 import '../../viewmodels/financial_viewmodel.dart';
 import '../../viewmodels/organization_dashboard_viewmodel.dart';
 import '../../core/services/admin_service.dart';
-import 'organization_dashboard.dart';
-import '../projects/projects_list.dart';
+import '../../models/financial_transaction.dart';
 
 class FinancialLedgerScreen extends StatefulWidget {
   final int initialIndex;
   final Map<String, dynamic> organization;
-  const FinancialLedgerScreen(
-      {super.key, this.initialIndex = 2, required this.organization});
+  final Function(int)? onTabChange;
+  const FinancialLedgerScreen({
+    super.key,
+    this.initialIndex = 2,
+    required this.organization,
+    this.onTabChange,
+  });
 
   @override
   State<FinancialLedgerScreen> createState() => _FinancialLedgerScreenState();
@@ -77,121 +81,36 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   Widget build(BuildContext context) {
     final groupedTransactions = _viewModel.groupedTransactions;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF6F7F8),
-      appBar: _buildAppBar(context),
-      bottomNavigationBar: _buildBottomNav(),
-      body: Stack(
-        children: [
-          RefreshIndicator(
-            onRefresh: _fetchTransactions,
-            color: const Color(0xFF137FEC),
-            backgroundColor: Colors.white,
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 100),
-              children: [
-                _buildBalanceCard(),
-                _buildFilterTabs(),
-                if (_viewModel.isLoading)
-                  const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (groupedTransactions.isEmpty)
-                  _buildEmptyState()
-                else
-                  ...groupedTransactions.expand(
-                    (group) => [
-                      _buildDateHeader(group.$1),
-                      ...group.$2.map(_buildTransactionRow),
-                    ],
-                  ),
-              ],
-            ),
+    return Stack(
+      children: [
+        RefreshIndicator(
+          onRefresh: _fetchTransactions,
+          color: const Color(0xFF137FEC),
+          backgroundColor: Colors.white,
+          child: ListView(
+            padding: const EdgeInsets.only(bottom: 100, top: 50),
+            children: [
+              _buildBalanceCard(),
+              _buildFilterTabs(),
+              if (_viewModel.isLoading)
+                const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (groupedTransactions.isEmpty)
+                _buildEmptyState()
+              else
+                ...groupedTransactions.expand(
+                  (group) => [
+                    _buildDateHeader(group.$1),
+                    ...group.$2.map(_buildTransactionRow),
+                  ],
+                ),
+            ],
           ),
-          _buildFloatingActionButton(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomNav() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-      decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.9),
-          border: const Border(top: BorderSide(color: Color(0xFFF3F4F6)))),
-      child: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: (idx) {
-          if (idx == 0) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                  builder: (_) =>
-                      OrganizationDashboard(organization: widget.organization)),
-            );
-          } else if (idx == 1) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(
-                  builder: (_) => ProjectsList(
-                      initialIndex: 1, organization: widget.organization)),
-            );
-          } else {
-            setState(() {
-              currentIndex = idx;
-            });
-          }
-        },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        selectedItemColor: const Color(0xFF137FEC),
-        unselectedItemColor: const Color(0xFF9CA3AF),
-        showUnselectedLabels: true,
-        selectedFontSize: 10,
-        unselectedFontSize: 10,
-        items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.grid_view_rounded), label: "Dashboard"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.assignment_outlined), label: "Projects"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.account_balance_wallet_outlined),
-              label: "Finances"),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline), label: "Profile"),
-        ],
-      ),
-    );
-  }
-
-  PreferredSizeWidget _buildAppBar(BuildContext context) {
-    return AppBar(
-      backgroundColor: Colors.white.withValues(alpha: 0.8),
-      elevation: 0,
-      centerTitle: true,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back_ios,
-            color: Color(0xFF111418), size: 20),
-        onPressed: () => Navigator.pop(context),
-      ),
-      title: Text(
-        "Financial Ledger",
-        style: GoogleFonts.inter(
-          color: const Color(0xFF111418),
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
         ),
-      ),
-      actions: [
-        IconButton(
-          icon: const Icon(Icons.more_horiz, color: Color(0xFF111418)),
-          onPressed: () {},
-        ),
+        _buildFloatingActionButton(),
       ],
-      shape: const Border(bottom: BorderSide(color: Color(0x0D137FEC))),
     );
   }
 
@@ -331,22 +250,19 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     );
   }
 
-  Widget _buildTransactionRow(Map<String, dynamic> transaction) {
-    final amount = _viewModel.getSignedAmount(transaction);
-    final occurredAt = DateTime.tryParse(
-          transaction['occurred_at']?.toString() ?? '',
-        ) ??
-        DateTime.now();
+  Widget _buildTransactionRow(FinancialTransaction transaction) {
+    final amount = transaction.isIncome ? transaction.amount : -transaction.amount;
+    final occurredAt = transaction.occurredAt;
     final department =
-        (transaction['department']?.toString().trim().isNotEmpty ?? false)
-            ? transaction['department'].toString()
+        (transaction.department?.trim().isNotEmpty ?? false)
+            ? transaction.department.toString()
             : 'General';
     final description =
-        (transaction['description']?.toString().trim().isNotEmpty ?? false)
-            ? transaction['description'].toString()
+        (transaction.description?.trim().isNotEmpty ?? false)
+            ? transaction.description.toString()
             : (amount > 0 ? 'Incoming funds' : 'Expense recorded');
     final deptColor = _departmentColor(department);
-    final title = transaction['title']?.toString() ?? 'Untitled transaction';
+    final title = transaction.title;
 
     // Check if this is a budget allocation
     final isBudgetAllocation = title.contains('Budget Allocation') ||
@@ -422,7 +338,9 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
               Text(
                 isBudgetAllocation
                     ? _formatCurrency(amount.abs())
-                    : '${isIncome ? '+' : '-'}${_formatCurrency(amount.abs())}',
+                    : amount == 0 
+                        ? _formatCurrency(amount.abs())
+                        : '${isIncome ? '+' : '-'}${_formatCurrency(amount.abs())}',
                 style: GoogleFonts.inter(
                   color: isBudgetAllocation
                       ? const Color(
@@ -754,31 +672,6 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
     });
   }
 
-  double _toDouble(dynamic value) {
-    if (value is num) {
-      return value.toDouble();
-    }
-    return double.tryParse(value?.toString() ?? '') ?? 0.0;
-  }
-
-  String _formatCurrency(double amount) {
-    final absolute = amount.abs().toStringAsFixed(2);
-    final parts = absolute.split('.');
-    final whole = parts[0];
-    final decimals = parts[1];
-    final buffer = StringBuffer();
-
-    for (var index = 0; index < whole.length; index++) {
-      final reversedIndex = whole.length - index;
-      buffer.write(whole[index]);
-      if (reversedIndex > 1 && reversedIndex % 3 == 1) {
-        buffer.write(',');
-      }
-    }
-
-    return '₱${buffer.toString()}.$decimals';
-  }
-
   Future<void> _saveTransaction() async {
     setState(() => _errorMessage = null);
     final amount = double.tryParse(_amountController.text.trim());
@@ -797,7 +690,8 @@ class _TransactionFormDialogState extends State<_TransactionFormDialog> {
             title.toLowerCase().contains('budget adjustment');
 
     if (isExpense && !isBudgetAllocation) {
-      final openingBudget = _toDouble(widget.organization['budget']);
+        final openingBudget =
+          (widget.organization['budget'] as num?)?.toDouble() ?? 0.0;
       final transactionSum = widget.viewModel.currentBalance;
       final totalAvailableBalance = openingBudget + transactionSum;
 

@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
 import '../core/services/task_service.dart';
+import '../models/task.dart';
 
 class TasksViewModel extends ChangeNotifier {
   final TaskService _taskService = TaskService();
 
-  List<Map<String, dynamic>> _tasks = [];
-  Map<String, List<Map<String, dynamic>>> _tasksByCategory = {};
+  List<Task> _tasks = [];
+  Map<String, List<Task>> _tasksByCategory = {};
   bool _isLoading = false;
   String? _errorMessage;
   String? _currentProjectId;
 
-  List<Map<String, dynamic>> get tasks => _tasks;
-  Map<String, List<Map<String, dynamic>>> get tasksByCategory => _tasksByCategory;
+  List<Task> get tasks => _tasks;
+  Map<String, List<Task>> get tasksByCategory => _tasksByCategory;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get currentProjectId => _currentProjectId;
@@ -80,7 +81,7 @@ class TasksViewModel extends ChangeNotifier {
       final updated = await _taskService.updateTask(taskId, updates);
 
       // Update local task list
-      final index = _tasks.indexWhere((task) => task['id'] == taskId);
+      final index = _tasks.indexWhere((task) => task.id == taskId);
       if (index != -1) {
         _tasks[index] = updated;
       }
@@ -114,9 +115,8 @@ class TasksViewModel extends ChangeNotifier {
         throw Exception('Failed to delete task from database');
       }
 
-      // Remove from local task list (handle both 'id' and 'task_id' fields)
-      _tasks.removeWhere((task) => 
-          task['id'] == taskId || task['task_id'] == taskId);
+      // Remove from local task list
+      _tasks.removeWhere((task) => task.id == taskId);
 
       // Refresh grouped tasks
       if (_currentProjectId != null) {
