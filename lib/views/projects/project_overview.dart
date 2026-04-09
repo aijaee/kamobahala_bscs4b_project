@@ -76,47 +76,7 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen>
     try {
       final projectsVM = context.read<ProjectsViewModel>();
       final financialVM = context.read<FinancialViewModel>();
-      final tasksVM = context.read<TasksViewModel>();
       final projectId = widget.project!.id;
-      final organizationId = widget.organization['id']?.toString();
-
-      // Ensure latest project task data before calculating net completion amount.
-      await tasksVM.fetchProjectTasks(projectId);
-
-      final taskExpense = tasksVM.tasks
-          .where((task) => task.deductFromBudget == true)
-          .fold<double>(0.0, (sum, task) => sum + (task.estimatedExpense ?? 0));
-
-      final taskIncome = tasksVM.tasks
-          .where((task) => task.deductFromBudget == false)
-          .fold<double>(0.0, (sum, task) => sum + (task.estimatedExpense ?? 0));
-
-      final projectTransactions = financialVM.transactions
-          .where((transaction) => transaction.projectId == projectId)
-          .toList();
-
-      final transactionExpense = projectTransactions.where((transaction) {
-        final title = transaction.title.toLowerCase();
-        return transaction.isExpense &&
-            !title.contains('budget allocation') &&
-            !title.contains('budget adjustment') &&
-            !title.contains('project completed');
-      }).fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
-
-      final transactionIncome = projectTransactions.where((transaction) {
-        final title = transaction.title.toLowerCase();
-        return transaction.isIncome &&
-            !title.contains('budget allocation') &&
-            !title.contains('budget adjustment') &&
-            !title.contains('project completed');
-      }).fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
-
-      final totalIncome = taskIncome > 0 ? taskIncome : transactionIncome;
-      final totalExpense = taskExpense > 0 ? taskExpense : transactionExpense;
-      final netAmount = totalIncome - totalExpense;
-
-      print(
-          'Project completion: Income=$totalIncome, Expense=$totalExpense, Net=$netAmount');
 
       // Update project status to completed
       final success = await projectsVM.updateProject(
@@ -133,50 +93,19 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen>
         return;
       }
 
-      // Record the project completion transaction and update depository.
-      // Positive net -> income, negative net -> expense.
-      if (organizationId != null && netAmount != 0) {
-        try {
-          financialVM.setCurrentOrganization(organizationId);
-
-          // Create financial transaction for project completion
-          await financialVM.createTransaction({
-            'title': 'Project Completed: ${widget.project?.name}',
-            'transaction_type': netAmount >= 0 ? 'income' : 'expense',
-            'amount': netAmount.abs(),
-            'category': 'Project Completion',
-            'department': 'Projects',
-            'description':
-                'Project completion net adjustment (Income: ₱$totalIncome - Expense: ₱$totalExpense)',
-            'project_id': projectId,
-            'occurred_at': DateTime.now().toIso8601String(),
-          });
-
-          print('Transaction recorded for project completion');
-
-          // Refresh financial data
-          await financialVM.fetchTransactions(organizationId);
-
-          print('Depository updated with net amount: $netAmount');
-        } catch (e) {
-          print('Error recording project completion transaction: $e');
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                  content: Text(
-                      'Note: Project completed, but could not update depository: $e')),
-            );
-            return;
-          }
-        }
+      // Do not post a bulk "Project Completed" financial adjustment.
+      // Task and manual project transactions are already reflected in the depository.
+      final organizationId = widget.organization['id']?.toString();
+      if (organizationId != null) {
+        await financialVM.fetchTransactions(organizationId);
       }
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text(
-                'Project "${widget.project?.name}" marked as completed (Net: ₱${netAmount.toStringAsFixed(2)})')),
+          content: Text(
+            'Project "${widget.project?.name}" marked as completed')),
       );
 
       // Refresh completed projects list
@@ -618,25 +547,30 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen>
                 .where((transaction) => transaction.projectId == projectId)
                 .toList();
 
-        final transactionBudgetUtilized =
-            projectTransactions.where((transaction) {
+        final nonTaskExpense = projectTransactions.where((transaction) {
           final title = transaction.title.toLowerCase();
+          final isInternalTransfer = title.contains('budget allocation') ||
+            title.contains('budget adjustment');
+          final isTaskTransaction =
+            (transaction.taskId?.isNotEmpty ?? false) ||
+              title.startsWith('task:');
           return transaction.isExpense &&
-              !title.contains('budget allocation') &&
-              !title.contains('budget adjustment');
+            !isInternalTransfer &&
+            !isTaskTransaction;
         }).fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
 
-        final transactionIncome = projectTransactions.where((transaction) {
+        final nonTaskIncome = projectTransactions.where((transaction) {
           final title = transaction.title.toLowerCase();
-          return transaction.isIncome &&
-              !title.contains('budget allocation') &&
-              !title.contains('budget adjustment');
+          final isInternalTransfer = title.contains('budget allocation') ||
+            title.contains('budget adjustment');
+          final isTaskTransaction =
+            (transaction.taskId?.isNotEmpty ?? false) ||
+              title.startsWith('task:');
+          return transaction.isIncome && !isInternalTransfer && !isTaskTransaction;
         }).fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
 
-        final budgetUtilized = taskBudgetUtilized > 0
-            ? taskBudgetUtilized
-            : transactionBudgetUtilized;
-        final projectIncome = taskIncome > 0 ? taskIncome : transactionIncome;
+        final budgetUtilized = taskBudgetUtilized + nonTaskExpense;
+        final projectIncome = taskIncome + nonTaskIncome;
 
         final utilizationPercent =
             projectBudget > 0 ? (budgetUtilized / projectBudget) : 0.0;

@@ -44,8 +44,9 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
         final title = transaction.title.toLowerCase();
         final isInternalTransfer = title.contains('budget allocation') ||
             title.contains('budget adjustment');
+        final isCompletionBookkeeping = title.contains('project completed');
 
-        if (!isInternalTransfer) {
+        if (!isInternalTransfer && !isCompletionBookkeeping) {
           final signedAmount = getSignedAmount(transaction);
           if (signedAmount > 0) {
             _totalIncome += signedAmount;
@@ -128,6 +129,11 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
     // Treat budget allocations as positive (they're internal transfers, not expenses)
     if (title.contains('budget allocation') || title.contains('budget adjustment')) {
       return amount;
+    }
+
+    // Completion entries are bookkeeping records and should not impact balance.
+    if (title.contains('project completed')) {
+      return 0.0;
     }
 
     return transaction.isIncome ? amount : -amount;
