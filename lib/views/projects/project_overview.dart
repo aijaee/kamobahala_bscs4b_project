@@ -153,7 +153,6 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen> with Widg
           SnackBar(content: Text('Error: $e')),
         );
       }
-      print('Error marking project as complete: $e');
     }
   }
 
