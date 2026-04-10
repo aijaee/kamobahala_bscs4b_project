@@ -5,7 +5,6 @@ import '../../models/organization_member.dart';
 class OrganizationService {
   final SupabaseClient _client = Supabase.instance.client;
 
-  // TODO: [MVVM] this should be called via OrganizationViewModel for UI data binding
   Future<List<Organization>> getOrganizations() async {
     try {
       final user = _client.auth.currentUser;
