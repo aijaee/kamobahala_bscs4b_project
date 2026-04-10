@@ -346,6 +346,19 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     bool isProjectChild = false,
   }) {
     final amount = _viewModel.getSignedAmount(transaction);
+    final title = transaction.title;
+    final lowerTitle = title.toLowerCase();
+    final lowerDescription = (transaction.description ?? '').toLowerCase();
+    final isTaskTransaction =
+      (transaction.taskId?.trim().isNotEmpty ?? false) ||
+        lowerTitle.startsWith('task:');
+    final isAllocationBackedTaskExpense =
+      transaction.isExpense &&
+        isTaskTransaction &&
+        lowerDescription.contains('allocation-backed expense');
+    final displayAmount = isAllocationBackedTaskExpense
+      ? -transaction.amount.abs()
+      : amount;
     final occurredAt = transaction.occurredAt;
     final department =
         (transaction.department?.trim().isNotEmpty ?? false)
@@ -354,14 +367,13 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     final description =
         (transaction.description?.trim().isNotEmpty ?? false)
             ? transaction.description.toString()
-            : (amount > 0 ? 'Incoming funds' : 'Expense recorded');
+        : (displayAmount > 0 ? 'Incoming funds' : 'Expense recorded');
     final deptColor = _departmentColor(department);
-    final title = transaction.title;
 
     // Check if this is a budget allocation
     final isBudgetAllocation = title.contains('Budget Allocation') ||
         title.contains('Budget Adjustment');
-    bool isIncome = amount > 0 && !isBudgetAllocation;
+    bool isIncome = displayAmount > 0 && !isBudgetAllocation;
 
     return Container(
       padding: EdgeInsets.fromLTRB(isProjectChild ? 40 : 16, 12, 16, 12),
@@ -430,9 +442,9 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                amount == 0
-                    ? _formatCurrency(amount.abs())
-                    : '${amount > 0 ? '+' : '-'}${_formatCurrency(amount.abs())}',
+                displayAmount == 0
+                  ? _formatCurrency(displayAmount.abs())
+                  : '${displayAmount > 0 ? '+' : '-'}${_formatCurrency(displayAmount.abs())}',
                 style: GoogleFonts.inter(
                   color: isBudgetAllocation
                       ? const Color(
