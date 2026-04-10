@@ -249,9 +249,12 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen>
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: const Color(0xFFF3F4F6)),
             ),
-            child: Text(
-              "No tasks yet. Create one to get started!",
-              style: GoogleFonts.inter(color: const Color(0xFF617589)),
+            child: Center(
+              child: Text(
+                "No tasks yet. Create one to get started!",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(color: const Color(0xFF617589)),
+              ),
             ),
           );
         }
