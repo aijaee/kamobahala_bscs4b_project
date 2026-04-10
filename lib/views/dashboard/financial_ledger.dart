@@ -248,11 +248,16 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     final Map<String, String> projectLabels = {};
 
     for (final transaction in transactions) {
+      final lowerTitle = transaction.title.toLowerCase();
       final isTaskTransaction =
           (transaction.taskId?.trim().isNotEmpty ?? false) ||
-          transaction.title.toLowerCase().startsWith('task:');
+          lowerTitle.startsWith('task:');
+      final isProjectAllocationReturn =
+          lowerTitle.startsWith('project allocation return:');
+      final isProjectGroupedTransaction =
+          isTaskTransaction || isProjectAllocationReturn;
 
-      if (!isTaskTransaction) {
+      if (!isProjectGroupedTransaction) {
         standaloneTransactions.add(transaction);
         continue;
       }
@@ -328,6 +333,9 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     }
     if (title.startsWith('Budget Adjustment:')) {
       return title.replaceFirst('Budget Adjustment:', '').trim();
+    }
+    if (title.startsWith('Project Allocation Return:')) {
+      return title.replaceFirst('Project Allocation Return:', '').trim();
     }
 
     return 'Project';

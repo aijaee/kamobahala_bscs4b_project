@@ -137,7 +137,7 @@ class ProjectService {
     if (oldStatus != 'completed' && newStatus == 'completed') {
       await _syncTaskTransactionsForCompletedProject(updatedProject);
     } else if (oldStatus == 'completed' && newStatus != 'completed') {
-      await _deleteProjectTaskTransactions(projectId);
+      await _deleteProjectCompletionTransactions(projectId);
     }
 
     return updatedProject;
@@ -145,7 +145,7 @@ class ProjectService {
 
   Future<void> _syncTaskTransactionsForCompletedProject(Project project) async {
     try {
-      await _deleteProjectTaskTransactions(project.id);
+      await _deleteProjectCompletionTransactions(project.id);
 
       final tasksResponse = await _client
           .from('tasks')
@@ -158,6 +158,31 @@ class ProjectService {
 
       final now = DateTime.now().toIso8601String();
       final financialService = FinancialService();
+
+      final projectBudget = project.budget ?? 0;
+      final allocatedTaskExpenses = tasks
+          .where((task) => task['deduct_from_budget'] as bool? ?? false)
+          .fold<double>(
+            0.0,
+            (sum, task) =>
+                sum + ((task['estimated_expense'] as num?)?.toDouble() ?? 0.0),
+          );
+
+      final remainingAllocation = projectBudget - allocatedTaskExpenses;
+      if (remainingAllocation > 0) {
+        await financialService.createTransaction(
+          project.organizationId,
+          {
+            'title': 'Project Allocation Return: ${project.name}',
+            'description': 'Unused allocation returned to depository',
+            'department': 'Projects',
+            'transaction_type': 'income',
+            'amount': remainingAllocation,
+            'occurred_at': now,
+            'project_id': project.id,
+          },
+        );
+      }
 
       for (final task in tasks) {
         final amount = (task['estimated_expense'] as num?)?.toDouble() ?? 0.0;
@@ -173,16 +198,17 @@ class ProjectService {
         final taskTitle = (task['title'] as String?)?.trim();
         final title = (taskTitle == null || taskTitle.isEmpty) ? 'Task' : taskTitle;
         final deductFromBudget = task['deduct_from_budget'] as bool? ?? false;
-
         final transactionType = deductFromBudget ? 'expense' : 'income';
         final descriptionPrefix = deductFromBudget ? 'Expense' : 'Income';
+        final allocationBackedTag =
+            deductFromBudget ? ' (Allocation-backed expense)' : '';
 
         await financialService.createTransaction(
           project.organizationId,
           {
             'title': 'Task: $title',
             'description':
-                '$descriptionPrefix for task: $title (Project: ${project.name})',
+              '$descriptionPrefix for task: $title (Project: ${project.name})$allocationBackedTag',
             'department': 'Tasks',
             'transaction_type': transactionType,
             'amount': amount,
@@ -197,15 +223,21 @@ class ProjectService {
     }
   }
 
-  Future<void> _deleteProjectTaskTransactions(String projectId) async {
+  Future<void> _deleteProjectCompletionTransactions(String projectId) async {
     try {
       await _client
           .from('financial_transactions')
           .delete()
           .eq('project_id', projectId)
           .not('task_id', 'is', null);
+
+      await _client
+          .from('financial_transactions')
+          .delete()
+          .eq('project_id', projectId)
+          .eq('description', 'Unused allocation returned to depository');
     } catch (e) {
-      print('Error deleting project task transactions: $e');
+      print('Error deleting project completion transactions: $e');
     }
   }
 
