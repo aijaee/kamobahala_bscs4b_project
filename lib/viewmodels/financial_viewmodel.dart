@@ -205,6 +205,10 @@ class FinancialViewModel extends ChangeNotifier {
       final amount = transaction.amount.abs();
 
       if (!isCompletionBookkeeping) {
+        if (_isAllocationBackedTaskExpense(transaction)) {
+          continue;
+        }
+
         if (_isBudgetAllocationTransaction(transaction)) {
           totalExpenses += amount;
           continue;
@@ -260,6 +264,10 @@ class FinancialViewModel extends ChangeNotifier {
       return 0.0;
     }
 
+    if (_isAllocationBackedTaskExpense(transaction)) {
+      return 0.0;
+    }
+
     if (_isBudgetAllocationTransaction(transaction)) {
       return -amount;
     }
@@ -272,6 +280,18 @@ class FinancialViewModel extends ChangeNotifier {
     final description = (transaction.description ?? '').toLowerCase();
     return title.contains('budget allocation') ||
       description.contains('budget allocated for project');
+  }
+
+  bool _isAllocationBackedTaskExpense(FinancialTransaction transaction) {
+    final title = transaction.title.toLowerCase();
+    final description = (transaction.description ?? '').toLowerCase();
+    final isTaskTransaction =
+        (transaction.taskId?.trim().isNotEmpty ?? false) ||
+            title.startsWith('task:');
+
+    return transaction.isExpense &&
+        isTaskTransaction &&
+        description.contains('allocation-backed expense');
   }
 
   void _setLoading(bool value) {
