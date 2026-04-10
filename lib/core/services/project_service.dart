@@ -198,22 +198,17 @@ class ProjectService {
         final taskTitle = (task['title'] as String?)?.trim();
         final title = (taskTitle == null || taskTitle.isEmpty) ? 'Task' : taskTitle;
         final deductFromBudget = task['deduct_from_budget'] as bool? ?? false;
-
-        // Tasks that already consume the project allocation should not post a
-        // second depository hit when the project is completed.
-        if (deductFromBudget) {
-          continue;
-        }
-
-        const transactionType = 'income';
-        const descriptionPrefix = 'Income';
+        final transactionType = deductFromBudget ? 'expense' : 'income';
+        final descriptionPrefix = deductFromBudget ? 'Expense' : 'Income';
+        final allocationBackedTag =
+            deductFromBudget ? ' (Allocation-backed expense)' : '';
 
         await financialService.createTransaction(
           project.organizationId,
           {
             'title': 'Task: $title',
             'description':
-                '$descriptionPrefix for task: $title (Project: ${project.name})',
+              '$descriptionPrefix for task: $title (Project: ${project.name})$allocationBackedTag',
             'department': 'Tasks',
             'transaction_type': transactionType,
             'amount': amount,
