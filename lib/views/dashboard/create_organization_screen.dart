@@ -378,6 +378,32 @@ class _CreateOrganizationScreenState extends State<CreateOrganizationScreen> {
   }
 
   Future<void> _createOrganization() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Create Organization'),
+          content: Text(
+            'Create organization "${nameController.text.trim()}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Create'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
     final budget = double.tryParse(budgetController.text.trim()) ?? 0.0;

@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'edit_task_screen.dart';
 import '../../viewmodels/tasks_viewmodel.dart';
+import '../../viewmodels/financial_viewmodel.dart';
 import '../../models/task.dart';
 import '../../models/organization_member.dart';
 import '../../core/services/admin_service.dart';
@@ -33,11 +34,9 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   void initState() {
     super.initState();
     final taskStatus = (widget.task is Map)
-        ? widget.task['status']
-        : (widget.task as Task).status;
-    _currentStatus = taskStatus == 'Todo' || taskStatus == 'todo'
-        ? 'To Do'
-        : (taskStatus ?? 'To Do');
+      ? widget.task['status']
+      : (widget.task as Task).status;
+    _currentStatus = _displayStatusFor(taskStatus);
     _checkAdminStatus();
   }
 
@@ -82,11 +81,12 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
         return;
       }
 
-      final isMarkedComplete = _currentStatus.toLowerCase() == 'todo';
-      final newStatus = isMarkedComplete ? 'completed' : 'todo';
+      final isCurrentlyCompleted = _isCompletedStatus(_currentStatus);
+      final newStatus = isCurrentlyCompleted ? 'todo' : 'completed';
 
       // Get viewmodels from Provider
       final tasksViewModel = context.read<TasksViewModel>();
+      final financialViewModel = context.read<FinancialViewModel>();
 
       // Update task status through ViewModel (this will notify listeners)
       final updateSuccess =
@@ -103,13 +103,20 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
 
       if (mounted) {
         setState(() {
-          _currentStatus = newStatus == 'completed' ? 'Completed' : 'To Do';
+          _currentStatus = _displayStatusFor(newStatus);
           _taskUpdated = true;
         });
 
+        final organizationId = widget.organizationId;
+        if (organizationId != null) {
+          await financialViewModel.fetchTransactions(organizationId);
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Task marked as ${newStatus.toLowerCase()}'),
+            content: Text(
+              'Task marked as ${newStatus == 'completed' ? 'completed' : 'to do'}',
+            ),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -497,7 +504,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                   border: Border.all(color: budgetModeColor, width: 1),
                 ),
                 child: Text(
-                  deductFromBudget ? 'Deduct from Budget' : 'Add to Budget',
+                  deductFromBudget ? 'Deduct from Budget' : 'Add to Depository',
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -513,7 +520,7 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
   }
 
   PreferredSizeWidget _buildAppBar(BuildContext context) {
-    final isCompleted = _currentStatus.toLowerCase() == 'completed';
+    final isCompleted = _isCompletedStatus(_currentStatus);
     return AppBar(
       backgroundColor: const Color(0xFF137FEC),
       elevation: 0,
@@ -601,5 +608,29 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
     if (value is int) return value.toDouble();
     if (value is String) return double.tryParse(value);
     return null;
+  }
+
+  String _displayStatusFor(dynamic status) {
+    final normalizedStatus = _normalizeStatus(status);
+    if (normalizedStatus == 'completed') {
+      return 'Completed';
+    }
+    if (normalizedStatus == 'todo' || normalizedStatus == 'to do') {
+      return 'To Do';
+    }
+    return (status?.toString().trim().isNotEmpty ?? false)
+        ? status.toString().trim()
+        : 'To Do';
+  }
+
+  bool _isCompletedStatus(dynamic status) {
+    return _normalizeStatus(status) == 'completed';
+  }
+
+  String _normalizeStatus(dynamic status) {
+    return (status?.toString() ?? '')
+        .toLowerCase()
+        .replaceAll('_', '')
+        .replaceAll(' ', '');
   }
 }

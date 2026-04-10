@@ -46,11 +46,12 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
 
   // Budget-related state
   double _projectBudget = 0.0;
-  double _trueProjectCeiling =
-      0.0; // Static ceiling - does not change based on user input
+  double _projectRemainingBudget = 0.0;
+  double _editableTaskCeiling = 0.0;
   double _depositoryBalance = 0.0; // Depository balance for validation
   bool _isLoadingBudget = true;
   double _originalTaskExpense = 0.0;
+  bool _originalTaskDeductsFromBudget = false;
 
   @override
   void initState() {
@@ -67,6 +68,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     _selectedPriority = widget.task['priority'] ?? 'Low';
     _selectedStatus = widget.task['status'] ?? 'todo';
     _deductFromBudget = widget.task['deduct_from_budget'] as bool? ?? false;
+    _originalTaskDeductsFromBudget = _deductFromBudget;
     _selectedCategory = widget.task['category'] ?? 'Uncategorized';
     _selectedAssignee = widget.task['assignee_id'] ?? widget.task['assignee'];
     _selectedExpenseCategory =
@@ -105,11 +107,21 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       final allocatedBudget = project.budget ?? 0.0;
 
       final taskService = TaskService();
-      await taskService.fetchProjectTasks(widget.projectId);
+        final projectTasks = await taskService.fetchProjectTasks(widget.projectId);
 
-      // TODO: [REFACTORING] Financial tracking for tasks needs to be re-implemented
-      // The Task model no longer stores deduct_from_budget and estimated_expense
-      double existingTasksExpenses = 0.0;
+        final otherTasksExpenses = projectTasks
+          .where((task) =>
+            task.id != widget.taskId &&
+            task.deductFromBudget == true &&
+            (task.estimatedExpense ?? 0) > 0)
+          .fold<double>(
+            0.0, (sum, task) => sum + (task.estimatedExpense ?? 0));
+
+        final currentTaskExpense =
+          _originalTaskDeductsFromBudget ? _originalTaskExpense : 0.0;
+        final editableTaskCeiling = allocatedBudget - otherTasksExpenses;
+        final remainingAfterCurrentTask =
+          editableTaskCeiling - currentTaskExpense;
 
       // Fetch depository balance from FinancialViewModel
       final financialVM = context.read<FinancialViewModel>();
@@ -129,7 +141,10 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       if (mounted) {
         setState(() {
           _projectBudget = allocatedBudget;
-          _trueProjectCeiling = allocatedBudget - existingTasksExpenses;
+          _editableTaskCeiling = editableTaskCeiling;
+          _projectRemainingBudget = remainingAfterCurrentTask < 0
+              ? 0.0
+              : remainingAfterCurrentTask;
           _depositoryBalance = depositoryBalance;
           _isLoadingBudget = false;
         });
@@ -138,7 +153,8 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       if (mounted) {
         setState(() {
           _isLoadingBudget = false;
-          _trueProjectCeiling = 0;
+          _editableTaskCeiling = 0;
+          _projectRemainingBudget = 0;
         });
       }
     }
@@ -209,12 +225,12 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     }
 
     // CALCULATE THE "TRUE FIXED CEILING" (Pre-Input)
-    // Formula: fixedProjectCeiling = (Project_Total_Budget) - (Sum of OTHER tasks) + (This Task's Original Expense)
-    // This allows budget reallocation without adding the current user input
+    // Formula: fixedProjectCeiling = (Project_Total_Budget) - (Sum of OTHER tasks)
+    // The current task's original expense is only used as edit headroom when it was already a budget deduction.
     final double originalTaskExpense =
         (_originalTaskExpense as num? ?? 0).toDouble();
-    final double fixedProjectCeiling =
-        (_trueProjectCeiling as num? ?? 0).toDouble() + originalTaskExpense;
+    final double fixedProjectCeiling = _editableTaskCeiling +
+      (_originalTaskDeductsFromBudget ? originalTaskExpense : 0.0);
 
     // Get the user's input amount with proper type conversion
     double userInput = double.tryParse(_estimatedExpenseController.text) ?? 0.0;
@@ -248,6 +264,30 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       }
       return; // THIS KILLS THE FUNCTION. DO NOT PROCEED TO SAVE.
     }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Save Task Changes'),
+          content: Text(
+            'Apply changes to "${_taskNameController.text.trim()}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
 
     final taskData = <String, dynamic>{
       'title': _taskNameController.text,
@@ -899,7 +939,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                             : null,
                       ),
                       child: Text(
-                        "Add to Budget",
+                        "Add to Depo",
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 14,
@@ -922,7 +962,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
             child: Text(
               _deductFromBudget
                   ? "The estimated expense will be subtracted from the project budget."
-                  : "The income will be added to the project budget. Changes are recorded when the project is marked complete.",
+                : "The income will be added to the depository. Entries are recorded when the project is marked complete.",
               style: GoogleFonts.inter(
                   fontSize: 12, color: const Color(0xFF9CA3AF), height: 1.4),
             ),
@@ -953,8 +993,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   }
 
   Widget _buildBudgetAlert() {
-    // For edit mode: show the static ceiling (original remaining + this task's current expense)
-    final displayCeiling = _trueProjectCeiling + _originalTaskExpense;
+    final displayRemaining = _projectRemainingBudget;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -975,7 +1014,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                 Text(
                   _isLoadingBudget
                       ? "Project Budget: Loading..."
-                      : "Project Budget: ₱${_projectBudget.toStringAsFixed(2)} (₱${displayCeiling.toStringAsFixed(2)} remaining)",
+                      : "Project Budget: ₱${_projectBudget.toStringAsFixed(2)} (₱${displayRemaining.toStringAsFixed(2)} remaining)",
                   style: GoogleFonts.inter(
                     color: const Color(0xFF137FEC),
                     fontWeight: FontWeight.bold,
@@ -992,7 +1031,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Budget changes recorded when project is marked complete.",
+                  "Depo entries are recorded when project is marked complete.",
                   style: GoogleFonts.inter(
                     color: const Color(0xFF137FEC).withOpacity(0.7),
                     fontSize: 12,

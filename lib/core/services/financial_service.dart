@@ -4,6 +4,42 @@ import '../../models/financial_transaction.dart';
 class FinancialService {
   final SupabaseClient _client = Supabase.instance.client;
 
+  Future<double?> fetchOrganizationBudget(String organizationId) async {
+    final response = await _client
+        .from('organizations')
+        .select('budget')
+        .eq('id', organizationId)
+        .maybeSingle();
+
+    final rawBudget = response?['budget'];
+    if (rawBudget is num) {
+      return rawBudget.toDouble();
+    }
+    if (rawBudget is String) {
+      return double.tryParse(rawBudget);
+    }
+    return null;
+  }
+
+  Future<Set<String>> fetchCompletedProjectIds(String organizationId) async {
+    final response = await _client
+        .from('projects')
+        .select('id,status')
+        .eq('organization_id', organizationId);
+
+    return (response as List)
+        .where((row) {
+          final status =
+              ((row as Map<String, dynamic>)['status']?.toString() ?? '')
+                  .toLowerCase()
+                  .trim();
+          return status == 'completed' || status == 'complete';
+        })
+        .map((row) => (row as Map<String, dynamic>)['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+  }
+
   /// Fetches all transactions for a specific organization
   Future<List<FinancialTransaction>> fetchTransactions(String organizationId) async {
     final response = await _client

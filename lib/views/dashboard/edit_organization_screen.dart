@@ -231,6 +231,30 @@ class _EditOrganizationScreenState extends State<EditOrganizationScreen> {
       return;
     }
 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Save Organization Changes'),
+          content: Text(
+            'Apply updates to "${_viewModel.nameController.text.trim()}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
     final success =
         await _viewModel.updateOrganization(widget.organization['id']);
     if (!mounted) return;

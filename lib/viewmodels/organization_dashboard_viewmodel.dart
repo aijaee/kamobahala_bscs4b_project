@@ -39,14 +39,12 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
       _totalIncome = 0;
       _totalExpenses = 0;
 
-      // Calculate income and expenses (exclude budget allocations which are internal transfers)
+      // Calculate income and expenses from balance-impacting transactions.
       for (final transaction in transactions) {
         final title = transaction.title.toLowerCase();
-        final isInternalTransfer = title.contains('budget allocation') ||
-            title.contains('budget adjustment');
         final isCompletionBookkeeping = title.contains('project completed');
 
-        if (!isInternalTransfer && !isCompletionBookkeeping) {
+        if (!isCompletionBookkeeping) {
           final signedAmount = getSignedAmount(transaction);
           if (signedAmount > 0) {
             _totalIncome += signedAmount;
@@ -57,7 +55,7 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
       }
 
       // Calculate current balance: opening balance + income - expenses
-      _currentBalance = openingBalance + _totalIncome - _totalExpenses;
+      _currentBalance = (openingBalance + _totalIncome - _totalExpenses).abs();
       notifyListeners();
     } catch (e) {
       _errorMessage =
@@ -123,13 +121,8 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
 
   /// amount for a transaction (positive for income, negative for expense)
   double getSignedAmount(FinancialTransaction transaction) {
-    final amount = transaction.amount;
+    final amount = transaction.amount.abs();
     final title = transaction.title.toLowerCase();
-
-    // Treat budget allocations as positive (they're internal transfers, not expenses)
-    if (title.contains('budget allocation') || title.contains('budget adjustment')) {
-      return amount;
-    }
 
     // Completion entries are bookkeeping records and should not impact balance.
     if (title.contains('project completed')) {

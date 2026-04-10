@@ -342,6 +342,30 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
       }
     }
 
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Save Project Changes'),
+          content: Text(
+            'Apply updates to "${nameController.text.trim()}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
     final updates = {
       'name': nameController.text,
       'description': descriptionController.text,

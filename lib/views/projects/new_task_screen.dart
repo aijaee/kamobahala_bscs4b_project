@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:kamobahala_bscs4b_project/viewmodels/tasks_viewmodel.dart';
-import 'package:kamobahala_bscs4b_project/viewmodels/financial_viewmodel.dart';
 import 'package:kamobahala_bscs4b_project/core/services/organization_service.dart';
 import 'package:kamobahala_bscs4b_project/core/services/project_service.dart';
 import 'package:kamobahala_bscs4b_project/core/services/task_service.dart';
@@ -46,7 +45,6 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   double _projectBudget = 0.0;
   double _trueProjectCeiling =
       0.0; // Static ceiling - does not change based on user input
-  double _depositoryBalance = 0.0; // Depository balance for validation
   bool _isLoadingBudget = true;
 
   @override
@@ -72,31 +70,18 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       final allocatedBudget = project.budget ?? 0.0;
 
       final taskService = TaskService();
-      await taskService.fetchProjectTasks(widget.projectId);
-
-      double existingTasksExpenses =
-          0.0; // TODO: Update with new financial model
-
-      // Fetch depository balance from FinancialViewModel
-      final financialVM = context.read<FinancialViewModel>();
-      final orgService = OrganizationService();
-      final organizations = await orgService.getOrganizations();
-      double openingBudget = 0.0;
-      if (organizations.isNotEmpty) {
-        final currentOrg = organizations.firstWhere(
-          (org) => org.id == widget.organizationId,
-          orElse: () => organizations.first,
-        );
-        openingBudget = currentOrg.budget ?? 0.0;
-      }
-      final depositoryBalance =
-          financialVM.calculateAvailableBalance(openingBudget);
+      final projectTasks =
+          await taskService.fetchProjectTasks(widget.projectId);
+      final existingTasksExpenses = projectTasks
+          .where((task) =>
+              task.deductFromBudget == true && (task.estimatedExpense ?? 0) > 0)
+          .fold<double>(0.0, (sum, task) => sum + (task.estimatedExpense ?? 0));
 
       if (mounted) {
         setState(() {
           _projectBudget = allocatedBudget;
-          _trueProjectCeiling = allocatedBudget - existingTasksExpenses;
-          _depositoryBalance = depositoryBalance;
+          _trueProjectCeiling = (allocatedBudget - existingTasksExpenses)
+              .clamp(0.0, allocatedBudget);
           _isLoadingBudget = false;
         });
       }
@@ -191,20 +176,29 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
       return; // THIS KILLS THE FUNCTION. DO NOT PROCEED TO SAVE.
     }
 
-    // Check 2: Block save if depository balance is exceeded
-    if (_deductFromBudget && userInput > _depositoryBalance) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'INSUFFICIENT DEPOSITORY BALANCE: Available in depository is only ₱${_depositoryBalance.toStringAsFixed(2)}.',
-            ),
-            backgroundColor: Colors.red,
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Create Task'),
+          content: Text(
+            'Create "${_taskNameController.text.trim()}" in this project?',
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Create'),
+            ),
+          ],
         );
-      }
-      return; // THIS KILLS THE FUNCTION. DO NOT PROCEED TO SAVE.
-    }
+      },
+    );
+
+    if (confirmed != true) return;
 
     final taskData = <String, dynamic>{
       'title': _taskNameController.text,
@@ -782,7 +776,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                             : null,
                       ),
                       child: Text(
-                        "Add to Budget",
+                        "Add to Depository",
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 14,
@@ -805,7 +799,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             child: Text(
               _deductFromBudget
                   ? "The estimated expense will be subtracted from the project budget."
-                  : "The income will be added to the project budget. Changes are recorded when the project is marked complete.",
+                : "The income will be added to the depository. Entries are recorded when the project is marked complete.",
               style: GoogleFonts.inter(
                   fontSize: 12, color: const Color(0xFF9CA3AF), height: 1.4),
             ),
@@ -836,7 +830,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
   }
 
   Widget _buildBudgetAlert() {
-    // Display the project budget and depository balance
+    // Display the project budget for task validation context
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
@@ -865,7 +859,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Depository Available: ₱${_depositoryBalance.toStringAsFixed(2)}",
+                  "Task expense validation is based on remaining project budget only.",
                   style: GoogleFonts.inter(
                     color: const Color(0xFF137FEC).withValues(alpha: 0.7),
                     fontSize: 12,
@@ -873,7 +867,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Budget changes recorded when project is marked complete.",
+                  "Depo entries are recorded when project is marked complete.",
                   style: GoogleFonts.inter(
                     color: const Color(0xFF137FEC).withValues(alpha: 0.7),
                     fontSize: 12,

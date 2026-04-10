@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import '../core/services/financial_service.dart';
 import '../models/financial_transaction.dart';
+import '../models/task.dart';
 
 class FinancialViewModel extends ChangeNotifier {
   final FinancialService _financialService = FinancialService();
 
   List<FinancialTransaction> _transactions = [];
+  Set<String> _completedProjectIds = {};
+  double? _organizationOpeningBudget;
   bool _isLoading = false;
   String? _errorMessage;
   String? _currentOrganizationId;
@@ -13,24 +16,32 @@ class FinancialViewModel extends ChangeNotifier {
   final List<String> _filters = ['All', 'Income', 'Expenses'];
   int _selectedFilterIndex = 0;
 
-  List<FinancialTransaction> get transactions => _transactions;
+  List<FinancialTransaction> get transactions =>
+      _transactions.where(_isTransactionVisibleInFinance).toList();
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String? get currentOrganizationId => _currentOrganizationId;
+  double? get organizationOpeningBudget => _organizationOpeningBudget;
   List<String> get filters => _filters;
   int get selectedFilterIndex => _selectedFilterIndex;
 
   /// Get transactions based on current filter
   List<FinancialTransaction> get filteredTransactions {
+    final visibleTransactions = transactions;
+
     if (_selectedFilterIndex == 1) {
-      return _transactions.where((transaction) => transaction.isIncome).toList();
+      return visibleTransactions
+          .where((transaction) => transaction.isIncome)
+          .toList();
     }
 
     if (_selectedFilterIndex == 2) {
-      return _transactions.where((transaction) => transaction.isExpense).toList();
+      return visibleTransactions
+          .where((transaction) => transaction.isExpense)
+          .toList();
     }
 
-    return _transactions;
+    return visibleTransactions;
   }
 
   /// grouped transactions by date
@@ -50,14 +61,25 @@ class FinancialViewModel extends ChangeNotifier {
   Future<void> fetchTransactions(String organizationId) async {
     _setLoading(true);
     _errorMessage = null;
-    _currentOrganizationId = organizationId;
+
+    // Clear previous organization's finance snapshot immediately to prevent
+    // cross-org computations while the next fetch is in flight.
+    _transactions = [];
+    _completedProjectIds = {};
+    _organizationOpeningBudget = null;
 
     try {
       _transactions = await _financialService.fetchTransactions(organizationId);
+      _organizationOpeningBudget =
+          await _financialService.fetchOrganizationBudget(organizationId);
+      _completedProjectIds =
+          await _financialService.fetchCompletedProjectIds(organizationId);
+      _currentOrganizationId = organizationId;
       _setLoading(false);
       notifyListeners();
     } catch (e) {
       _errorMessage = 'Failed to fetch transactions: ${e.toString()}';
+      _currentOrganizationId = null;
       _setLoading(false);
       notifyListeners();
     }
@@ -106,7 +128,8 @@ class FinancialViewModel extends ChangeNotifier {
 
       if (success) {
         // Remove transactions from local list
-        _transactions.removeWhere((transaction) => transaction.taskId == taskId);
+        _transactions
+            .removeWhere((transaction) => transaction.taskId == taskId);
         notifyListeners();
       }
 
@@ -126,7 +149,8 @@ class FinancialViewModel extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      final updated = await _financialService.updateTransaction(transactionId, updates);
+      final updated =
+          await _financialService.updateTransaction(transactionId, updates);
 
       if (updated != null) {
         // Update in local list
@@ -153,51 +177,74 @@ class FinancialViewModel extends ChangeNotifier {
   }
 
   double get currentBalance {
-    return _transactions.fold<double>(
-      0.0,
-      (sum, transaction) => sum + getSignedAmount(transaction),
-    );
+    return transactions
+        .fold<double>(
+          0.0,
+          (sum, transaction) => sum + getSignedAmount(transaction),
+        )
+        .abs();
   }
 
-  /// Calculate available balance excluding internal transfers (budget allocations/adjustments).
+  /// Calculate available balance from the organization opening budget and all
+  /// balance-impacting income/expense transactions.
   /// Formula: openingBudget + (Income - Expenses)
   /// This is the true available balance for budget allocation decisions.
   double calculateAvailableBalance(double openingBudget) {
+    final baseOpeningBudget = _organizationOpeningBudget ?? openingBudget;
     double totalIncome = 0;
     double totalExpenses = 0;
 
-    for (final transaction in _transactions) {
+    for (final transaction in transactions) {
       final title = transaction.title.toLowerCase();
-      final isInternalTransfer = title.contains('budget allocation') ||
-          title.contains('budget adjustment');
       final isCompletionBookkeeping = title.contains('project completed');
+      final amount = transaction.amount.abs();
 
-      if (!isInternalTransfer && !isCompletionBookkeeping) {
+      if (!isCompletionBookkeeping) {
         if (transaction.isIncome) {
-          totalIncome += transaction.amount;
+          totalIncome += amount;
         } else {
-          totalExpenses += transaction.amount;
+          totalExpenses += amount;
         }
       }
     }
 
-    return openingBudget + totalIncome - totalExpenses;
+    return (baseOpeningBudget + totalIncome - totalExpenses).abs();
+  }
+
+  double calculateProjectSpent(String projectId, List<Task> projectTasks) {
+    if (projectId.isEmpty) return 0.0;
+
+    final projectTransactions = transactions
+        .where((transaction) => transaction.projectId == projectId)
+        .toList();
+
+    final taskEstimates = projectTasks
+        .where((task) => task.isCompleted && task.deductFromBudget == true)
+        .fold<double>(0.0, (sum, task) => sum + (task.estimatedExpense ?? 0.0));
+
+    final nonTaskExpenses = projectTransactions.where((transaction) {
+      final title = transaction.title.toLowerCase();
+      final isInternalTransfer = title.contains('budget allocation') ||
+          title.contains('budget adjustment');
+      final isTaskTransaction = (transaction.taskId?.isNotEmpty ?? false) ||
+          title.startsWith('task:');
+
+      return transaction.isExpense && !isInternalTransfer && !isTaskTransaction;
+    }).fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
+
+    return taskEstimates + nonTaskExpenses;
   }
 
   double getSignedAmount(FinancialTransaction transaction) {
     final title = transaction.title.toLowerCase();
-
-    // Treat budget allocations as positive (they're internal transfers, not expenses)
-    if (title.contains('budget allocation') || title.contains('budget adjustment')) {
-      return transaction.amount;
-    }
+    final amount = transaction.amount.abs();
 
     // Completion entries are bookkeeping records and should not impact balance.
     if (title.contains('project completed')) {
       return 0.0;
     }
 
-    return transaction.isIncome ? transaction.amount : -transaction.amount;
+    return transaction.isIncome ? amount : -amount;
   }
 
   void _setLoading(bool value) {
@@ -253,9 +300,29 @@ class FinancialViewModel extends ChangeNotifier {
   /// Clears all transaction data (used when switching organizations)
   void clearTransactions() {
     _transactions.clear();
+    _completedProjectIds.clear();
+    _organizationOpeningBudget = null;
     _currentOrganizationId = null;
     _errorMessage = null;
     _selectedFilterIndex = 0;
     notifyListeners();
+  }
+
+  bool _isTransactionVisibleInFinance(FinancialTransaction transaction) {
+    final title = transaction.title.toLowerCase();
+    final isTaskTransaction =
+        (transaction.taskId?.trim().isNotEmpty ?? false) ||
+            title.startsWith('task:');
+
+    if (!isTaskTransaction) {
+      return true;
+    }
+
+    final projectId = transaction.projectId?.trim();
+    if (projectId == null || projectId.isEmpty) {
+      return false;
+    }
+
+    return _completedProjectIds.contains(projectId);
   }
 }

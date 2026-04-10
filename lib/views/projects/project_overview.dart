@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../models/project.dart';
+import '../../models/task.dart';
 import '../../models/financial_transaction.dart';
 import 'task_list_screen.dart';
 import 'edit_proj_screen.dart';
@@ -104,8 +105,8 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Project "${widget.project?.name}" marked as completed')),
+            content:
+                Text('Project "${widget.project?.name}" marked as completed')),
       );
 
       // Refresh completed projects list
@@ -525,16 +526,11 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen>
         final projectId = widget.project?.id;
 
         final completedTasks = projectId == null
-            ? const <dynamic>[]
+            ? const <Task>[]
             : tasksVM.tasks
                 .where(
                     (task) => task.projectId == projectId && task.isCompleted)
                 .toList();
-
-        final taskBudgetUtilized = completedTasks
-            .where((task) => task.deductFromBudget == true)
-            .fold<double>(
-                0.0, (sum, task) => sum + (task.estimatedExpense ?? 0));
 
         final taskIncome = completedTasks
             .where((task) => task.deductFromBudget == false)
@@ -547,29 +543,20 @@ class _ProjectOverviewScreenState extends State<ProjectOverviewScreen>
                 .where((transaction) => transaction.projectId == projectId)
                 .toList();
 
-        final nonTaskExpense = projectTransactions.where((transaction) {
-          final title = transaction.title.toLowerCase();
-          final isInternalTransfer = title.contains('budget allocation') ||
-            title.contains('budget adjustment');
-          final isTaskTransaction =
-            (transaction.taskId?.isNotEmpty ?? false) ||
-              title.startsWith('task:');
-          return transaction.isExpense &&
-            !isInternalTransfer &&
-            !isTaskTransaction;
-        }).fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
-
         final nonTaskIncome = projectTransactions.where((transaction) {
           final title = transaction.title.toLowerCase();
           final isInternalTransfer = title.contains('budget allocation') ||
-            title.contains('budget adjustment');
-          final isTaskTransaction =
-            (transaction.taskId?.isNotEmpty ?? false) ||
+              title.contains('budget adjustment');
+          final isTaskTransaction = (transaction.taskId?.isNotEmpty ?? false) ||
               title.startsWith('task:');
-          return transaction.isIncome && !isInternalTransfer && !isTaskTransaction;
+          return transaction.isIncome &&
+              !isInternalTransfer &&
+              !isTaskTransaction;
         }).fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
 
-        final budgetUtilized = taskBudgetUtilized + nonTaskExpense;
+        final budgetUtilized = projectId == null
+            ? 0.0
+            : financialVM.calculateProjectSpent(projectId, completedTasks);
         final projectIncome = taskIncome + nonTaskIncome;
 
         final utilizationPercent =
