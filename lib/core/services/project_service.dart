@@ -120,7 +120,6 @@ class ProjectService {
     final updatedProject = Project.fromMap(response);
     final newStatus = updatedProject.status?.toLowerCase();
 
-    // Handle budget changes using delta only.
     // Increase in project budget reduces depository (expense), decrease refunds it (income).
     final budgetDelta = newBudget - oldBudget;
     if (budgetDelta != 0) {
@@ -175,15 +174,17 @@ class ProjectService {
         final title = (taskTitle == null || taskTitle.isEmpty) ? 'Task' : taskTitle;
         final deductFromBudget = task['deduct_from_budget'] as bool? ?? false;
 
+        final transactionType = deductFromBudget ? 'expense' : 'income';
+        final descriptionPrefix = deductFromBudget ? 'Expense' : 'Income';
+
         await financialService.createTransaction(
           project.organizationId,
           {
             'title': 'Task: $title',
-            'description': deductFromBudget
-                ? 'Expense for task: $title (Project: ${project.name})'
-                : 'Income for task: $title (Project: ${project.name})',
+            'description':
+                '$descriptionPrefix for task: $title (Project: ${project.name})',
             'department': 'Tasks',
-            'transaction_type': deductFromBudget ? 'expense' : 'income',
+            'transaction_type': transactionType,
             'amount': amount,
             'occurred_at': now,
             'task_id': taskId,

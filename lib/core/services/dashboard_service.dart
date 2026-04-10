@@ -78,58 +78,11 @@ class DashboardService {
     String organizationId,
     String userEmail,
   ) async {
-    try {
-      // Get all projects in organization
-      final projects = await _client
-          .from('projects')
-          .select()
-          .eq('organization_id', organizationId);
-
-      final assignedTasks = <Map<String, dynamic>>[];
-
-      // For each project, fetch tasks assigned to this user
-      for (var project in projects) {
-        final projectId = project['id'];
-        final tasks = await _client
-            .from('tasks')
-            .select()
-            .eq('project_id', projectId)
-            .eq('assignee', userEmail)
-            .neq('status', 'completed')
-            .order('priority', ascending: true);
-
-        for (var task in tasks) {
-          assignedTasks.add({
-            ...task,
-            'projectName': project['name'] ?? 'Untitled Project',
-            'projectId': projectId,
-          });
-        }
-      }
-
-      // Sort by priority
-      assignedTasks.sort((a, b) {
-        final priorityOrder = {'High': 0, 'Medium': 1, 'Low': 2};
-        final aPriority = priorityOrder[a['priority'] ?? 'Low'] ?? 2;
-        final bPriority = priorityOrder[b['priority'] ?? 'Low'] ?? 2;
-
-        if (aPriority != bPriority) return aPriority.compareTo(bPriority);
-
-        final aDueDate =
-            a['due_date'] != null ? DateTime.parse(a['due_date']) : null;
-        final bDueDate =
-            b['due_date'] != null ? DateTime.parse(b['due_date']) : null;
-
-        if (aDueDate == null) return 1;
-        if (bDueDate == null) return -1;
-        return aDueDate.compareTo(bDueDate);
-      });
-
-      return assignedTasks;
-    } catch (e) {
-      print('Error fetching admin assigned tasks: $e');
-      return [];
-    }
+    return _getAssignedTasksForUser(
+      organizationId: organizationId,
+      userEmail: userEmail,
+      errorContext: 'admin assigned',
+    );
   }
 
   /// Fetches tasks assigned to member (by email)
@@ -137,6 +90,18 @@ class DashboardService {
     String organizationId,
     String userEmail,
   ) async {
+    return _getAssignedTasksForUser(
+      organizationId: organizationId,
+      userEmail: userEmail,
+      errorContext: 'member assigned',
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _getAssignedTasksForUser({
+    required String organizationId,
+    required String userEmail,
+    required String errorContext,
+  }) async {
     try {
       // Get all projects in organization
       final projects = await _client
@@ -186,7 +151,7 @@ class DashboardService {
 
       return assignedTasks;
     } catch (e) {
-      print('Error fetching member assigned tasks: $e');
+      print('Error fetching $errorContext tasks: $e');
       return [];
     }
   }
