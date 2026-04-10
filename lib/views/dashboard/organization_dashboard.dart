@@ -54,11 +54,10 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     _dashboardViewModel.addListener(_onViewModelChanged);
 
     _getUserEmail();
-    _checkAdminStatus();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        _loadBalance();
+        _initializeDashboardData();
       }
     });
   }
@@ -70,6 +69,11 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       _cleanupViewModels();
       _initializeViewModels();
       _refreshProjects();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _initializeDashboardData();
+        }
+      });
     }
   }
 
@@ -96,12 +100,6 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     );
     _financialViewModel.addListener(_onViewModelChanged);
     _dashboardViewModel.addListener(_onViewModelChanged);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _loadBalance();
-      }
-    });
   }
 
   void _cleanupViewModels() {
@@ -120,6 +118,12 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     if (mounted) {
       setState(() => _isAdmin = isAdmin);
     }
+  }
+
+  Future<void> _initializeDashboardData() async {
+    await _checkAdminStatus();
+    if (!mounted) return;
+    await _loadBalance();
   }
 
   void _getUserEmail() {
@@ -149,8 +153,10 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
       );
     }
 
-    await _orgService
-        .syncMemberNamesFromProfiles(widget.organization['id'].toString());
+    if (_isAdmin) {
+      await _orgService
+          .syncMemberNamesFromProfiles(widget.organization['id'].toString());
+    }
   }
 
   void _refreshProjects() {
@@ -327,6 +333,10 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
                     sliver: SliverList(
                       delegate: SliverChildListDelegate([
                         _buildFinancialCard(context),
+                        if (!_isAdmin) ...[
+                          const SizedBox(height: 12),
+                          _buildMemberLimitedBanner(context),
+                        ],
                         const SizedBox(height: 24),
                         _buildSectionHeader(
                           _isAdmin ? "Priority Overview" : "Tasks Assigned",
@@ -523,10 +533,70 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     );
   }
 
+  Widget _buildMemberLimitedBanner(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFF7D6), Color(0xFFFEEDB0)],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE7B43B), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFC58E16).withOpacity(0.12),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFDF1C4),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.info_outline,
+              color: Color(0xFFA16207),
+              size: 18,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Member View',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFF8A5A05),
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Some actions are available to admins only',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: const Color(0xFFA16207),
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFinancialCard(BuildContext context) {
     final fallbackOpeningBudget = _toDouble(widget.organization['budget']);
-    final currentBalance =
-        _financialViewModel.calculateDepositoryCardBalance(fallbackOpeningBudget);
+    final currentBalance = _financialViewModel
+        .calculateDepositoryCardBalance(fallbackOpeningBudget);
 
     return Container(
       padding: const EdgeInsets.all(24),

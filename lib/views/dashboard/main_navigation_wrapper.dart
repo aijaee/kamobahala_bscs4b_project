@@ -104,35 +104,6 @@ class _MainNavigationWrapperState extends State<MainNavigationWrapper> {
           : null,
       body: Column(
         children: [
-          // Member status banner - only show for non-admins
-          if (!_isLoading && !_isAdmin)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF3C7),
-                border: const Border(
-                  bottom: BorderSide(color: Color(0xFFFCD34D), width: 2),
-                ),
-              ),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline,
-                    color: Color(0xFFA16207),
-                    size: 18,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Member View - Limited functionality',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: const Color(0xFFA16207),
-                          fontWeight: FontWeight.w500,
-                        ),
-                  ),
-                ],
-              ),
-            ),
           // Main content
           Expanded(
             child: IndexedStack(
