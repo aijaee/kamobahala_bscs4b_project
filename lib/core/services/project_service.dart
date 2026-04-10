@@ -174,19 +174,17 @@ class ProjectService {
         final title = (taskTitle == null || taskTitle.isEmpty) ? 'Task' : taskTitle;
         final deductFromBudget = task['deduct_from_budget'] as bool? ?? false;
 
-        // Task expenses marked as "Deduct from Budget" are internal to the
-        // project allocation and must not hit the organization depository.
-        if (deductFromBudget) {
-          continue;
-        }
+        final transactionType = deductFromBudget ? 'expense' : 'income';
+        final descriptionPrefix = deductFromBudget ? 'Expense' : 'Income';
 
         await financialService.createTransaction(
           project.organizationId,
           {
             'title': 'Task: $title',
-            'description': 'Income for task: $title (Project: ${project.name})',
+            'description':
+                '$descriptionPrefix for task: $title (Project: ${project.name})',
             'department': 'Tasks',
-            'transaction_type': 'income',
+            'transaction_type': transactionType,
             'amount': amount,
             'occurred_at': now,
             'task_id': taskId,
