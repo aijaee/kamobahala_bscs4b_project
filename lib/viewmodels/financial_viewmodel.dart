@@ -181,8 +181,7 @@ class FinancialViewModel extends ChangeNotifier {
         .fold<double>(
           0.0,
           (sum, transaction) => sum + getSignedAmount(transaction),
-        )
-        .abs();
+        );
   }
 
   /// Calculate available balance from the organization opening budget and all
@@ -190,6 +189,12 @@ class FinancialViewModel extends ChangeNotifier {
   /// Formula: openingBudget + (Income - Expenses)
   /// This is the true available balance for budget allocation decisions.
   double calculateAvailableBalance(double openingBudget) {
+    final rawBalance = calculateRawDepositoryBalance(openingBudget);
+    return rawBalance < 0 ? 0.0 : rawBalance;
+  }
+
+  /// Raw depository balance, may be negative when expenses exceed funds.
+  double calculateRawDepositoryBalance(double openingBudget) {
     final baseOpeningBudget = _organizationOpeningBudget ?? openingBudget;
     double totalIncome = 0;
     double totalExpenses = 0;
@@ -200,6 +205,11 @@ class FinancialViewModel extends ChangeNotifier {
       final amount = transaction.amount.abs();
 
       if (!isCompletionBookkeeping) {
+        if (_isBudgetAllocationTransaction(transaction)) {
+          totalExpenses += amount;
+          continue;
+        }
+
         if (transaction.isIncome) {
           totalIncome += amount;
         } else {
@@ -208,7 +218,13 @@ class FinancialViewModel extends ChangeNotifier {
       }
     }
 
-    return (baseOpeningBudget + totalIncome - totalExpenses).abs();
+    return baseOpeningBudget + totalIncome - totalExpenses;
+  }
+
+  /// Shared value used by top-level depository cards (Finance and Dashboard).
+  /// Keep both cards on this method to avoid computation drift between screens.
+  double calculateDepositoryCardBalance(double openingBudget) {
+    return calculateRawDepositoryBalance(openingBudget);
   }
 
   double calculateProjectSpent(String projectId, List<Task> projectTasks) {
@@ -244,7 +260,18 @@ class FinancialViewModel extends ChangeNotifier {
       return 0.0;
     }
 
+    if (_isBudgetAllocationTransaction(transaction)) {
+      return -amount;
+    }
+
     return transaction.isIncome ? amount : -amount;
+  }
+
+  bool _isBudgetAllocationTransaction(FinancialTransaction transaction) {
+    final title = transaction.title.toLowerCase();
+    final description = (transaction.description ?? '').toLowerCase();
+    return title.contains('budget allocation') ||
+      description.contains('budget allocated for project');
   }
 
   void _setLoading(bool value) {

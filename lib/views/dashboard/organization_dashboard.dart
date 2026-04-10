@@ -526,11 +526,10 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
   Widget _buildFinancialCard(BuildContext context) {
     final fallbackOpeningBudget = _toDouble(widget.organization['budget']);
     final currentBalance =
-      _financialViewModel.calculateAvailableBalance(fallbackOpeningBudget);
+        _financialViewModel.calculateDepositoryCardBalance(fallbackOpeningBudget);
 
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: const Color(0xFF137FEC),
         borderRadius: BorderRadius.circular(16),
@@ -589,32 +588,14 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(
-            _balanceHidden
-                ? "••••••••"
-                : _formatCurrency(currentBalance),
+            _balanceHidden ? '••••••••' : _formatCurrency(currentBalance),
             style: GoogleFonts.inter(
               color: Colors.white,
-              fontSize: 30,
+              fontSize: 36,
               fontWeight: FontWeight.bold,
             ),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () {
-              // Switch to Finances tab using the callback
-              widget.onTabChange?.call(2);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF137FEC),
-              minimumSize: const Size(double.infinity, 44),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              elevation: 0,
-            ),
-            child: const Text("View Financial Details"),
           ),
         ],
       ),
@@ -627,11 +608,15 @@ class _OrganizationDashboardState extends State<OrganizationDashboard>
     final whole = parts[0];
     final decimals = parts[1];
     final buffer = StringBuffer();
+
     for (var index = 0; index < whole.length; index++) {
       final reversedIndex = whole.length - index;
       buffer.write(whole[index]);
-      if (reversedIndex > 1 && reversedIndex % 3 == 1) buffer.write(',');
+      if (reversedIndex > 1 && reversedIndex % 3 == 1) {
+        buffer.write(',');
+      }
     }
+
     return '${amount < 0 ? '-₱' : '₱'}${buffer.toString()}.$decimals';
   }
 

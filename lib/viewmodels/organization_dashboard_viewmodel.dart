@@ -45,7 +45,7 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
         final isCompletionBookkeeping = title.contains('project completed');
 
         if (!isCompletionBookkeeping) {
-          final signedAmount = getSignedAmount(transaction);
+          final signedAmount = _financialViewModel.getSignedAmount(transaction);
           if (signedAmount > 0) {
             _totalIncome += signedAmount;
           } else {
@@ -55,7 +55,7 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
       }
 
       // Calculate current balance: opening balance + income - expenses
-      _currentBalance = (openingBalance + _totalIncome - _totalExpenses).abs();
+      _currentBalance = openingBalance + _totalIncome - _totalExpenses;
       notifyListeners();
     } catch (e) {
       _errorMessage =
@@ -117,19 +117,6 @@ class OrganizationDashboardViewModel extends ChangeNotifier {
 
     _isLoadingDeadlines = false;
     notifyListeners();
-  }
-
-  /// amount for a transaction (positive for income, negative for expense)
-  double getSignedAmount(FinancialTransaction transaction) {
-    final amount = transaction.amount.abs();
-    final title = transaction.title.toLowerCase();
-
-    // Completion entries are bookkeeping records and should not impact balance.
-    if (title.contains('project completed')) {
-      return 0.0;
-    }
-
-    return transaction.isIncome ? amount : -amount;
   }
 
   double _toDouble(dynamic value) {

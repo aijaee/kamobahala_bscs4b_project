@@ -798,7 +798,7 @@ class _NewTaskScreenState extends State<NewTaskScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: Text(
               _deductFromBudget
-                  ? "The estimated expense will be subtracted from the project budget."
+                  ? "The estimated expense will be subtracted from the project budget only (not depository)."
                 : "The income will be added to the depository. Entries are recorded when the project is marked complete.",
               style: GoogleFonts.inter(
                   fontSize: 12, color: const Color(0xFF9CA3AF), height: 1.4),
