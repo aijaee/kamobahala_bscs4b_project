@@ -137,6 +137,13 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     return financialViewModel.calculateAvailableBalance(openingBudget);
   }
 
+  double _getRawDepositoryBalance() {
+    final financialViewModel =
+        Provider.of<FinancialViewModel>(context, listen: false);
+    final openingBudget = _toDouble(widget.organization['budget']);
+    return financialViewModel.calculateRawDepositoryBalance(openingBudget);
+  }
+
   double _toDouble(dynamic value) {
     if (value is num) {
       return value.toDouble();
@@ -542,7 +549,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           const SizedBox(height: 4),
           Consumer<FinancialViewModel>(
             builder: (context, financialViewModel, _) {
-              final balance = _getAvailableBalance();
+              final balance = _getRawDepositoryBalance();
               return Text(
                 "₱${balance.toStringAsFixed(2)}",
                 style: GoogleFonts.inter(

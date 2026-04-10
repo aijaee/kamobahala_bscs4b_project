@@ -48,7 +48,6 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   double _projectBudget = 0.0;
   double _projectRemainingBudget = 0.0;
   double _editableTaskCeiling = 0.0;
-  double _depositoryBalance = 0.0; // Depository balance for validation
   bool _isLoadingBudget = true;
   double _originalTaskExpense = 0.0;
   bool _originalTaskDeductsFromBudget = false;
@@ -72,7 +71,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     _selectedCategory = widget.task['category'] ?? 'Uncategorized';
     _selectedAssignee = widget.task['assignee_id'] ?? widget.task['assignee'];
     _selectedExpenseCategory =
-        widget.task['expense_category']?.toString() ?? 'Transportation';
+      widget.task['expense_category']?.toString() ?? 'Uncategorized';
     _originalTaskExpense = estimatedExpense;
 
     if (_selectedAssignee != null) {
@@ -123,21 +122,6 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
         final remainingAfterCurrentTask =
           editableTaskCeiling - currentTaskExpense;
 
-      // Fetch depository balance from FinancialViewModel
-      final financialVM = context.read<FinancialViewModel>();
-      final orgService = OrganizationService();
-      final organizations = await orgService.getOrganizations();
-      double openingBudget = 0.0;
-      if (organizations.isNotEmpty) {
-        final currentOrg = organizations.firstWhere(
-          (org) => org.id == widget.organizationId,
-          orElse: () => organizations.first,
-        );
-        openingBudget = currentOrg.budget ?? 0.0;
-      }
-      final depositoryBalance =
-          financialVM.calculateAvailableBalance(openingBudget);
-
       if (mounted) {
         setState(() {
           _projectBudget = allocatedBudget;
@@ -145,7 +129,6 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
           _projectRemainingBudget = remainingAfterCurrentTask < 0
               ? 0.0
               : remainingAfterCurrentTask;
-          _depositoryBalance = depositoryBalance;
           _isLoadingBudget = false;
         });
       }
@@ -250,21 +233,6 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       return; // THIS KILLS THE FUNCTION. DO NOT PROCEED TO SAVE.
     }
 
-    // Check 2: Block save if depository balance is exceeded
-    if (_deductFromBudget && userInput > _depositoryBalance) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'INSUFFICIENT DEPOSITORY BALANCE: Available in depository is only ₱${_depositoryBalance.toStringAsFixed(2)}.',
-            ),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return; // THIS KILLS THE FUNCTION. DO NOT PROCEED TO SAVE.
-    }
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
@@ -303,7 +271,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       taskData['estimated_expense'] =
           double.tryParse(_estimatedExpenseController.text) ?? 0.0;
       taskData['expense_category'] =
-          _selectedExpenseCategory ?? 'Transportation';
+          _selectedExpenseCategory ?? 'Uncategorized';
       taskData['deduct_from_budget'] = _deductFromBudget;
     }
 
@@ -866,7 +834,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
             onTap: _showExpenseCategoryPicker,
             child: _buildListTile(
               "Category",
-              _selectedExpenseCategory ?? "Transportation",
+              _selectedExpenseCategory ?? "Uncategorized",
               true,
               valueColor: const Color(0xFF137FEC),
             ),
@@ -939,7 +907,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                             : null,
                       ),
                       child: Text(
-                        "Add to Depo",
+                        "Add to Depository",
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
                           fontSize: 14,
@@ -961,7 +929,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: Text(
               _deductFromBudget
-                  ? "The estimated expense will be subtracted from the project budget."
+                  ? "The estimated expense will be subtracted from the project budget only (not depository)."
                 : "The income will be added to the depository. Entries are recorded when the project is marked complete.",
               style: GoogleFonts.inter(
                   fontSize: 12, color: const Color(0xFF9CA3AF), height: 1.4),
@@ -1023,7 +991,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Depository Available: ₱${_depositoryBalance.toStringAsFixed(2)}",
+                  "Task expense validation is based on remaining project budget only.",
                   style: GoogleFonts.inter(
                     color: const Color(0xFF137FEC).withOpacity(0.7),
                     fontSize: 12,

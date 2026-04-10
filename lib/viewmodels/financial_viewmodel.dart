@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../core/services/financial_service.dart';
 import '../models/financial_transaction.dart';
+import '../models/task.dart';
 
 class FinancialViewModel extends ChangeNotifier {
   final FinancialService _financialService = FinancialService();
@@ -127,7 +128,8 @@ class FinancialViewModel extends ChangeNotifier {
 
       if (success) {
         // Remove transactions from local list
-        _transactions.removeWhere((transaction) => transaction.taskId == taskId);
+        _transactions
+            .removeWhere((transaction) => transaction.taskId == taskId);
         notifyListeners();
       }
 
@@ -147,7 +149,8 @@ class FinancialViewModel extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      final updated = await _financialService.updateTransaction(transactionId, updates);
+      final updated =
+          await _financialService.updateTransaction(transactionId, updates);
 
       if (updated != null) {
         // Update in local list
@@ -174,10 +177,11 @@ class FinancialViewModel extends ChangeNotifier {
   }
 
   double get currentBalance {
-    return transactions.fold<double>(
-      0.0,
-      (sum, transaction) => sum + getSignedAmount(transaction),
-    ).abs();
+    return transactions
+        .fold<double>(
+          0.0,
+          (sum, transaction) => sum + getSignedAmount(transaction),
+        );
   }
 
   /// Calculate available balance from the organization opening budget and all
@@ -185,6 +189,12 @@ class FinancialViewModel extends ChangeNotifier {
   /// Formula: openingBudget + (Income - Expenses)
   /// This is the true available balance for budget allocation decisions.
   double calculateAvailableBalance(double openingBudget) {
+    final rawBalance = calculateRawDepositoryBalance(openingBudget);
+    return rawBalance < 0 ? 0.0 : rawBalance;
+  }
+
+  /// Raw depository balance, may be negative when expenses exceed funds.
+  double calculateRawDepositoryBalance(double openingBudget) {
     final baseOpeningBudget = _organizationOpeningBudget ?? openingBudget;
     double totalIncome = 0;
     double totalExpenses = 0;
@@ -195,6 +205,11 @@ class FinancialViewModel extends ChangeNotifier {
       final amount = transaction.amount.abs();
 
       if (!isCompletionBookkeeping) {
+        if (_isBudgetAllocationTransaction(transaction)) {
+          totalExpenses += amount;
+          continue;
+        }
+
         if (transaction.isIncome) {
           totalIncome += amount;
         } else {
@@ -203,7 +218,37 @@ class FinancialViewModel extends ChangeNotifier {
       }
     }
 
-    return (baseOpeningBudget + totalIncome - totalExpenses).abs();
+    return baseOpeningBudget + totalIncome - totalExpenses;
+  }
+
+  /// Shared value used by top-level depository cards (Finance and Dashboard).
+  /// Keep both cards on this method to avoid computation drift between screens.
+  double calculateDepositoryCardBalance(double openingBudget) {
+    return calculateRawDepositoryBalance(openingBudget);
+  }
+
+  double calculateProjectSpent(String projectId, List<Task> projectTasks) {
+    if (projectId.isEmpty) return 0.0;
+
+    final projectTransactions = transactions
+        .where((transaction) => transaction.projectId == projectId)
+        .toList();
+
+    final taskEstimates = projectTasks
+        .where((task) => task.isCompleted && task.deductFromBudget == true)
+        .fold<double>(0.0, (sum, task) => sum + (task.estimatedExpense ?? 0.0));
+
+    final nonTaskExpenses = projectTransactions.where((transaction) {
+      final title = transaction.title.toLowerCase();
+      final isInternalTransfer = title.contains('budget allocation') ||
+          title.contains('budget adjustment');
+      final isTaskTransaction = (transaction.taskId?.isNotEmpty ?? false) ||
+          title.startsWith('task:');
+
+      return transaction.isExpense && !isInternalTransfer && !isTaskTransaction;
+    }).fold<double>(0.0, (sum, transaction) => sum + transaction.amount);
+
+    return taskEstimates + nonTaskExpenses;
   }
 
   double getSignedAmount(FinancialTransaction transaction) {
@@ -215,7 +260,18 @@ class FinancialViewModel extends ChangeNotifier {
       return 0.0;
     }
 
+    if (_isBudgetAllocationTransaction(transaction)) {
+      return -amount;
+    }
+
     return transaction.isIncome ? amount : -amount;
+  }
+
+  bool _isBudgetAllocationTransaction(FinancialTransaction transaction) {
+    final title = transaction.title.toLowerCase();
+    final description = (transaction.description ?? '').toLowerCase();
+    return title.contains('budget allocation') ||
+      description.contains('budget allocated for project');
   }
 
   void _setLoading(bool value) {
@@ -283,7 +339,7 @@ class FinancialViewModel extends ChangeNotifier {
     final title = transaction.title.toLowerCase();
     final isTaskTransaction =
         (transaction.taskId?.trim().isNotEmpty ?? false) ||
-        title.startsWith('task:');
+            title.startsWith('task:');
 
     if (!isTaskTransaction) {
       return true;

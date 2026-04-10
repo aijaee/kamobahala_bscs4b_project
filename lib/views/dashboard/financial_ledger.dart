@@ -103,7 +103,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
   Widget _buildBalanceCard() {
     final fallbackOpeningBudget = _toDouble(widget.organization['budget']);
     final currentBalance =
-        _viewModel.calculateAvailableBalance(fallbackOpeningBudget);
+        _viewModel.calculateDepositoryCardBalance(fallbackOpeningBudget);
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -337,7 +337,7 @@ class _FinancialLedgerScreenState extends State<FinancialLedgerScreen> {
     FinancialTransaction transaction, {
     bool isProjectChild = false,
   }) {
-    final amount = transaction.isIncome ? transaction.amount : -transaction.amount;
+    final amount = _viewModel.getSignedAmount(transaction);
     final occurredAt = transaction.occurredAt;
     final department =
         (transaction.department?.trim().isNotEmpty ?? false)
